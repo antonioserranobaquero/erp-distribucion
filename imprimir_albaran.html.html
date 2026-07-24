@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Albarán de Entrega - ERP</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Librería para convertir HTML a PDF directamente -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #f1f5f9; margin: 0; padding: 20px; color: #1e293b; }
+    
+    .acciones-bar { max-width: 800px; margin: 0 auto 20px auto; display: flex; gap: 10px; }
+    .btn { padding: 12px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem; display: inline-flex; align-items: center; gap: 8px; }
+    .btn-pdf { background: #dc2626; color: white; }
+    .btn-print { background: #0284c7; color: white; }
+    .btn-volver { background: #64748b; color: white; text-decoration: none; }
+
+    /* Plantilla Hoja A4 */
+    .documento-a4 { background: white; width: 800px; min-height: 1050px; margin: 0 auto; padding: 40px; box-sizing: border-box; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 25px; }
+    .empresa-info h1 { margin: 0; font-size: 1.8rem; color: #0f172a; letter-spacing: -0.5px; }
+    .empresa-info p { margin: 3px 0; font-size: 0.85rem; color: #64748b; }
+    
+    .albaran-badge { text-align: right; }
+    .albaran-badge .num { font-size: 1.5rem; font-weight: bold; color: #2563eb; margin: 0; }
+    .albaran-badge .fecha { font-size: 0.9rem; color: #475569; font-weight: 600; margin-top: 5px; }
+
+    .cliente-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 30px; display: flex; justify-content: space-between; }
+    .cliente-box h3 { margin: 0 0 8px 0; font-size: 0.95rem; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+    .cliente-box p { margin: 2px 0; font-size: 0.95rem; font-weight: 500; }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+    th { background: #0f172a; color: white; text-align: left; padding: 10px 12px; font-size: 0.85rem; text-transform: uppercase; }
+    td { padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+    tr:nth-child(even) td { background: #f8fafc; }
+
+    .totales-container { display: flex; justify-content: flex-end; margin-bottom: 40px; }
+    .totales-card { width: 280px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; }
+    .totales-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+    .totales-row.final { font-size: 1.2rem; font-weight: bold; border-top: 2px solid #0f172a; padding-top: 8px; margin-bottom: 0; color: #0f172a; }
+
+    .firmas-container { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 20px; border-top: 1px dashed #cbd5e1; }
+    .firma-box { width: 45%; text-align: center; font-size: 0.85rem; color: #64748b; }
+    .linea-firma { margin-top: 50px; border-bottom: 1px solid #94a3b8; }
+  </style>
+</head>
+<body>
+
+  <!-- Barra de acciones superior -->
+  <div class="acciones-bar">
+    <button class="btn btn-pdf" onclick="descargarPDF()">📄 Descargar PDF</button>
+    <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir</button>
+    <a href="albaranes.html" class="btn btn-volver">⬅️ Volver a Albaranes</a>
+  </div>
+
+  <!-- Documento que se convertirá en PDF -->
+  <div class="documento-a4" id="documento_pdf">
+    <div class="header">
+      <div class="empresa-info">
+        <h1 id="emp_nombre">Cargando empresa...</h1>
+        <p id="emp_cif">CIF: -</p>
+        <p>Especialistas en Distribución y Congelados</p>
+      </div>
+      <div class="albaran-badge">
+        <div class="num" id="alb_numero">ALB-0000</div>
+        <div class="fecha" id="alb_fecha">Fecha: --/--/----</div>
+      </div>
+    </div>
+
+    <div class="cliente-box">
+      <div>
+        <h3>Cliente / Receptor:</h3>
+        <p id="cli_nombre"><strong>Cargando cliente...</strong></p>
+        <p id="cli_cif">CIF/NIF: -</p>
+        <p id="cli_dir">Dirección: -</p>
+      </div>
+      <div style="text-align: right;">
+        <h3>Forma de Pago:</h3>
+        <p id="cli_pago">Giro / Contado</p>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Producto / Descripción</th>
+          <th style="text-align: center;">Detalle / Formato</th>
+          <th style="text-align: right;">Precio/Unid</th>
+          <th style="text-align: right;">Importe</th>
+        </tr>
+      </thead>
+      <tbody id="tabla_lineas_pdf">
+        <tr><td colspan="4" style="text-align: center;">Cargando líneas del albarán...</td></tr>
+      </tbody>
+    </table>
+
+    <div class="totales-container">
+      <div class="totales-card">
+        <div class="totales-row">
+          <span>Base Imponible:</span>
+          <span id="txt_base">0.00 €</span>
+        </div>
+        <div class="totales-row">
+          <span>IVA (10%):</span>
+          <span id="txt_iva">0.00 €</span>
+        </div>
+        <div class="totales-row final">
+          <span>TOTAL:</span>
+          <span id="txt_total">0.00 €</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="firmas-container">
+      <div class="firma-box">
+        Firma y Sello Conforme Cliente
+        <div class="linea-firma"></div>
+      </div>
+      <div class="firma-box">
+        Entregado por (Repartidor)
+        <div class="linea-firma"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5YnpsdHd4cHdlemF3Zm5rbGdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MjcxMjYsImV4cCI6MjEwMDMwMzEyNn0.Ib17m5wofSx8Z0PCUT2Q_Orx5OTtGyW7W9_EoJupmgY";
+
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    window.onload = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const albaranId = urlParams.get('id');
+
+      if (albaranId) {
+        await cargarDatosAlbaran(albaranId);
+      } else {
+        await cargarUltimoAlbaran();
+      }
+    };
+
+    async function cargarUltimoAlbaran() {
+      const { data } = await db.from('albaranes').select('id').order('fecha', { ascending: false }).limit(1).single();
+      if (data) await cargarDatosAlbaran(data.id);
+    }
+
+    async function cargarDatosAlbaran(id) {
+      const { data: alb } = await db.from('albaranes').select('*').eq('id', id).single();
+      if (!alb) return;
+
+      const { data: emp } = await db.from('empresas').select('*').eq('id', alb.empresa_id).single();
+      const { data: cli } = await db.from('clientes').select('*').eq('id', alb.cliente_id).single();
+      const { data: lineas } = await db.from('lineas_albaran').select('*, productos(nombre)').eq('albaran_id', id);
+
+      document.getElementById('emp_nombre').innerText = emp.nombre || 'Mi Empresa';
+      document.getElementById('emp_cif').innerText = "CIF: " + (emp.cif || '-');
+
+      document.getElementById('alb_numero').innerText = alb.numero_albaran;
+      document.getElementById('alb_fecha').innerText = "Fecha: " + new Date(alb.fecha).toLocaleDateString('es-ES');
+
+      document.getElementById('cli_nombre').innerText = cli ? cli.nombre_comercial : 'Cliente General';
+      document.getElementById('cli_cif').innerText = "CIF/NIF: " + (cli?.cif_nif || '-');
+      document.getElementById('cli_dir').innerText = "Dirección: " + (cli?.direccion || '-');
+      document.getElementById('cli_pago').innerText = cli?.forma_pago || 'Giro 30 días';
+
+      const tbody = document.getElementById('tabla_lineas_pdf');
+      tbody.innerHTML = (lineas || []).map(l => {
+        let detalle = l.formato_venta === 'cajas' 
+          ? `${l.cajas} caja(s) (~${l.kilos || 0} kg)` 
+          : `${l.kilos} kg (${l.cajas || 0} cajas)`;
+
+        return `
+          <tr>
+            <td><strong>${l.productos?.nombre || 'Producto'}</strong></td>
+            <td style="text-align: center;">${detalle}</td>
+            <td style="text-align: right;">${l.precio_unitario.toFixed(2)} €/kg</td>
+            <td style="text-align: right; font-weight: bold;">${l.subtotal.toFixed(2)} €</td>
+          </tr>
+        `;
+      }).join('');
+
+      const subtotalTotal = alb.total_euros || 0;
+      const baseImponible = subtotalTotal / 1.10;
+      const ivaCalculado = subtotalTotal - baseImponible;
+
+      document.getElementById('txt_base').innerText = baseImponible.toFixed(2) + " €";
+      document.getElementById('txt_iva').innerText = ivaCalculado.toFixed(2) + " €";
+      document.getElementById('txt_total').innerText = subtotalTotal.toFixed(2) + " €";
+    }
+
+    function descargarPDF() {
+      const elemento = document.getElementById('documento_pdf');
+      const numAlbaran = document.getElementById('alb_numero').innerText;
+
+      const opt = {
+        margin:       10,
+        filename:     `${numAlbaran}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(opt).from(elemento).save();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuración - ERP Distribución</title>
+  
+  <!-- Tailwind CSS, FontAwesome y Supabase JS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="p-4 md:p-8">
+
+  <div class="max-w-4xl mx-auto space-y-6">
+    
+    <!-- HEADER -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-gears text-blue-600"></i> Configuración del Sistema y Empresa
+        </h1>
+        <p class="text-slate-500 text-sm mt-1">Datos fiscales de la distribuidora, reg. sanitario y series de facturación</p>
+      </div>
+      <div class="flex gap-2">
+        <a href="index.html" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium text-sm transition flex items-center gap-1">
+          <i class="fa-solid fa-house"></i> Inicio
+        </a>
+      </div>
+    </div>
+
+    <!-- FORMULARIO DE CONFIGURACIÓN -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+      
+      <!-- DATOS FISCALES Y EMPRESA -->
+      <div class="space-y-4">
+        <h2 class="text-lg font-bold text-slate-800 border-b pb-2 flex items-center gap-2">
+          <i class="fa-solid fa-building text-blue-600"></i> Datos Fiscales e Impresión PDF
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nombre Comercial / Razón Social *</label>
+            <input type="text" id="cfgNombre" placeholder="Distribuciones Congelados S.L." class="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">CIF / NIF Fiscal *</label>
+            <input type="text" id="cfgCif" placeholder="B-12345678" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Teléfono de Contacto</label>
+            <input type="text" id="cfgTel" placeholder="952 00 00 00" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Email de Empresa</label>
+            <input type="email" id="cfgEmail" placeholder="info@empresa.com" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Dirección Fiscal / Polígono / Almacén</label>
+            <input type="text" id="cfgDir" placeholder="Polígono Industrial Guadalhorce, Málaga" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nº Registro Sanitario</label>
+            <input type="text" id="cfgRegSanitario" placeholder="10.12345/MA" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">IVA por Defecto (%)</label>
+            <input type="number" step="0.5" id="cfgIva" value="10.00" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm font-bold text-slate-800">
+          </div>
+        </div>
+      </div>
+
+      <!-- PARÁMETROS DE SERIE -->
+      <div class="space-y-4 pt-4 border-t">
+        <h2 class="text-lg font-bold text-slate-800 border-b pb-2 flex items-center gap-2">
+          <i class="fa-solid fa-list-ol text-indigo-600"></i> Prefijos de Numeración Oficial
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Prefijo Serie Facturas</label>
+            <input type="text" id="cfgPrefFactura" value="FAC-2026-" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm font-mono font-bold text-blue-600">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Prefijo Serie Albaranes</label>
+            <input type="text" id="cfgPrefAlbaran" value="ALB-2026-" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm font-mono font-bold text-blue-600">
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTÓN GUARDAR -->
+      <div class="flex justify-end border-t pt-4">
+        <button onclick="guardarConfiguracion()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition flex items-center gap-2">
+          <i class="fa-solid fa-floppy-disk"></i> Guardar Configuración
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- SCRIPT SUPABASE -->
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5YnpsdHd4cHdlemF3Zm5rbGdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MjcxMjYsImV4cCI6MjEwMDMwMzEyNn0.Ib17m5wofSx8Z0PCUT2Q_Orx5OTtGyW7W9_EoJupmgY";
+    
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let empresaId = null;
+
+    window.onload = async () => {
+      await cargarConfiguracion();
+    };
+
+    async function cargarConfiguracion() {
+      const { data, error } = await dbClient.from('empresas').select('*').limit(1).maybeSingle();
+
+      if (error) {
+        console.error("Error al cargar configuración:", error);
+        return;
+      }
+
+      if (data) {
+        empresaId = data.id;
+        document.getElementById('cfgNombre').value = data.nombre_comercial || "";
+        document.getElementById('cfgCif').value = data.cif_nif || "";
+        document.getElementById('cfgTel').value = data.telefono || "";
+        document.getElementById('cfgEmail').value = data.email || "";
+        document.getElementById('cfgDir').value = data.direccion || "";
+        document.getElementById('cfgRegSanitario').value = data.registro_sanitario || "";
+        document.getElementById('cfgIva').value = data.iva_defecto || "10.00";
+        document.getElementById('cfgPrefFactura').value = data.prefijo_factura || "FAC-2026-";
+        document.getElementById('cfgPrefAlbaran').value = data.prefijo_albaran || "ALB-2026-";
+      }
+    }
+
+    async function guardarConfiguracion() {
+      const nombre = document.getElementById('cfgNombre').value.trim();
+      const cif = document.getElementById('cfgCif').value.trim();
+      const tel = document.getElementById('cfgTel').value.trim();
+      const email = document.getElementById('cfgEmail').value.trim();
+      const dir = document.getElementById('cfgDir').value.trim();
+      const regSan = document.getElementById('cfgRegSanitario').value.trim();
+      const iva = parseFloat(document.getElementById('cfgIva').value) || 10.00;
+      const prefFact = document.getElementById('cfgPrefFactura').value.trim();
+      const prefAlb = document.getElementById('cfgPrefAlbaran').value.trim();
+
+      if (!nombre || !cif) return alert("El nombre comercial y el CIF son obligatorios.");
+
+      const payload = {
+        nombre_comercial: nombre,
+        cif_nif: cif,
+        telefono: tel,
+        email: email,
+        direccion: dir,
+        registro_sanitario: regSan,
+        iva_defecto: iva,
+        prefijo_factura: prefFact,
+        prefijo_albaran: prefAlb
+      };
+
+      if (empresaId) {
+        const { error } = await dbClient.from('empresas').update(payload).eq('id', empresaId);
+        if (error) return alert("Error al guardar: " + error.message);
+      } else {
+        const { data: newEmp, error } = await dbClient.from('empresas').insert(payload).select().single();
+        if (error) return alert("Error al crear datos de empresa: " + error.message);
+        if (newEmp) empresaId = newEmp.id;
+      }
+
+      alert("¡Configuración guardada correctamente en la base de datos!");
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analítica y Márgenes - ERP Distribución</title>
+  
+  <!-- Tailwind CSS, FontAwesome y Supabase JS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="p-4 md:p-8">
+
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- HEADER -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-chart-pie text-blue-600"></i> Analítica de Ventas y Márgenes
+        </h1>
+        <p class="text-slate-500 text-sm mt-1">Análisis de rentabilidad real, costes de compra vs ventas y productos estrella</p>
+      </div>
+      <div class="flex gap-2">
+        <a href="index.html" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium text-sm transition flex items-center gap-1">
+          <i class="fa-solid fa-house"></i> Inicio
+        </a>
+      </div>
+    </div>
+
+    <!-- TARJETAS DE MÁRGENES Y BENEFICIO -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3.5 bg-blue-50 text-blue-600 rounded-xl text-2xl"><i class="fa-solid fa-cash-register"></i></div>
+        <div>
+          <p class="text-xs text-slate-500 font-bold uppercase">Ventas Totales</p>
+          <h3 id="kpiVentasTotal" class="text-xl font-black text-slate-800">0.00 €</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3.5 bg-rose-50 text-rose-600 rounded-xl text-2xl"><i class="fa-solid fa-cart-shopping"></i></div>
+        <div>
+          <p class="text-xs text-slate-500 font-bold uppercase">Coste de Compras</p>
+          <h3 id="kpiCostesTotal" class="text-xl font-black text-rose-600">0.00 €</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl text-2xl"><i class="fa-solid fa-sack-dollar"></i></div>
+        <div>
+          <p class="text-xs text-slate-500 font-bold uppercase">Beneficio Neto</p>
+          <h3 id="kpiBeneficioNeto" class="text-xl font-black text-emerald-600">0.00 €</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3.5 bg-indigo-50 text-indigo-600 rounded-xl text-2xl"><i class="fa-solid fa-percent"></i></div>
+        <div>
+          <p class="text-xs text-slate-500 font-bold uppercase">Margen Medio</p>
+          <h3 id="kpiMargenPorcentaje" class="text-xl font-black text-indigo-600">0.00 %</h3>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TABLAS DE RANKING -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      
+      <!-- TOP PRODUCTOS MÁS VENDIDOS -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2 border-b pb-3">
+          <i class="fa-solid fa-trophy text-amber-500"></i> Top Productos por Volumen (Kilos)
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-100 uppercase text-slate-500">
+              <tr>
+                <th class="p-2">Producto</th>
+                <th class="p-2 text-right">Kilos Vendidos</th>
+                <th class="p-2 text-right">Total Facturado (€)</th>
+              </tr>
+            </thead>
+            <tbody id="tablaTopProductos" class="divide-y divide-slate-100">
+              <tr><td colspan="3" class="p-4 text-center text-slate-400">Calculando analítica...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TOP CLIENTES POR FACTURACIÓN -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <h3 class="font-bold text-slate-800 flex items-center gap-2 border-b pb-3">
+          <i class="fa-solid fa-star text-blue-600"></i> Top Clientes por Facturación
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-100 uppercase text-slate-500">
+              <tr>
+                <th class="p-2">Cliente</th>
+                <th class="p-2 text-center">Nº Albaranes</th>
+                <th class="p-2 text-right">Total Generado (€)</th>
+              </tr>
+            </thead>
+            <tbody id="tablaTopClientes" class="divide-y divide-slate-100">
+              <tr><td colspan="3" class="p-4 text-center text-slate-400">Calculando analítica...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- SCRIPT SUPABASE -->
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5YnpsdHd4cHdlemF3Zm5rbGdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MjcxMjYsImV4cCI6MjEwMDMwMzEyNn0.Ib17m5wofSx8Z0PCUT2Q_Orx5OTtGyW7W9_EoJupmgY";
+    
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    window.onload = async () => {
+      await calcularEstadisticas();
+    };
+
+    async function calcularEstadisticas() {
+      // 1. Ventas
+      const { data: albaranes } = await dbClient.from('albaranes').select('*');
+      const albList = albaranes || [];
+      const totalVentas = albList.reduce((acc, a) => acc + parseFloat(a.total_euros || 0), 0);
+
+      // 2. Compras
+      const { data: compras } = await dbClient.from('compras').select('*');
+      const compList = compras || [];
+      const totalCompras = compList.reduce((acc, c) => acc + parseFloat(c.total_euros || 0), 0);
+
+      // 3. Beneficios y Márgenes
+      const beneficioNeto = totalVentas - totalCompras;
+      const margenPorcentaje = totalVentas > 0 ? (beneficioNeto / totalVentas) * 100 : 0;
+
+      document.getElementById('kpiVentasTotal').innerText = `${totalVentas.toFixed(2)} €`;
+      document.getElementById('kpiCostesTotal').innerText = `${totalCompras.toFixed(2)} €`;
+      document.getElementById('kpiBeneficioNeto').innerText = `${beneficioNeto.toFixed(2)} €`;
+      document.getElementById('kpiMargenPorcentaje').innerText = `${margenPorcentaje.toFixed(1)} %`;
+
+      // 4. Cargar Clientes para Ranking
+      const { data: clientes } = await dbClient.from('clientes').select('*');
+      const cliMap = {};
+      (clientes || []).forEach(c => cliMap[c.id] = c.nombre_comercial);
+
+      const clienteVentas = {};
+      const clienteConteos = {};
+
+      albList.forEach(a => {
+        const nom = cliMap[a.cliente_id] || 'Cliente Desconocido';
+        const imp = parseFloat(a.total_euros || 0);
+        clienteVentas[nom] = (clienteVentas[nom] || 0) + imp;
+        clienteConteos[nom] = (clienteConteos[nom] || 0) + 1;
+      });
+
+      const sortedClientes = Object.keys(clienteVentas)
+        .map(nom => ({ nombre: nom, total: clienteVentas[nom], envios: clienteConteos[nom] }))
+        .sort((a, b) => b.total - a.total);
+
+      const tbodyCli = document.getElementById('tablaTopClientes');
+      if (sortedClientes.length === 0) {
+        tbodyCli.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-slate-400">Sin datos de ventas.</td></tr>';
+      } else {
+        tbodyCli.innerHTML = sortedClientes.slice(0, 5).map(c => `
+          <tr>
+            <td class="p-2 font-bold text-slate-800">${c.nombre}</td>
+            <td class="p-2 text-center font-semibold text-slate-600">${c.envios} albaranes</td>
+            <td class="p-2 text-right font-bold text-blue-600">${c.total.toFixed(2)} €</td>
+          </tr>
+        `).join('');
+      }
+
+      // 5. Cargar Líneas para Top Productos
+      const { data: productos } = await dbClient.from('productos').select('*');
+      const prodMap = {};
+      (productos || []).forEach(p => prodMap[p.id] = p.nombre);
+
+      const idsAlb = albList.map(a => a.id);
+      let lineas = [];
+      if (idsAlb.length > 0) {
+        const { data: lData } = await dbClient.from('lineas_albaran').select('*').in('albaran_id', idsAlb);
+        lineas = lData || [];
+      }
+
+      const prodKilos = {};
+      const prodEuros = {};
+
+      lineas.forEach(l => {
+        const nom = l.producto || l.nombre_producto || prodMap[l.producto_id] || 'Producto Congelado';
+        const kg = parseFloat(l.kilos || 0);
+        const eur = parseFloat(l.subtotal || 0);
+
+        prodKilos[nom] = (prodKilos[nom] || 0) + kg;
+        prodEuros[nom] = (prodEuros[nom] || 0) + eur;
+      });
+
+      const sortedProductos = Object.keys(prodKilos)
+        .map(nom => ({ nombre: nom, kilos: prodKilos[nom], euros: prodEuros[nom] }))
+        .sort((a, b) => b.kilos - a.kilos);
+
+      const tbodyProd = document.getElementById('tablaTopProductos');
+      if (sortedProductos.length === 0) {
+        tbodyProd.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-slate-400">Sin líneas de producto registradas.</td></tr>';
+      } else {
+        tbodyProd.innerHTML = sortedProductos.slice(0, 5).map(p => `
+          <tr>
+            <td class="p-2 font-bold text-slate-800">${p.nombre}</td>
+            <td class="p-2 text-right font-bold text-emerald-600">${p.kilos.toFixed(2)} kg</td>
+            <td class="p-2 text-right font-bold text-slate-800">${p.euros.toFixed(2)} €</td>
+          </tr>
+        `).join('');
+      }
+    }
+  </script>
+</body>
+</html>

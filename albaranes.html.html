@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Albaranes - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS & html2pdf.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <style>
+    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body class="p-4 md:p-8">
+
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- HEADER -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-truck-ramp-box text-blue-600"></i> Emisión de Albaranes
+        </h1>
+        <p class="text-slate-500 text-sm mt-1">Generación de notas de entrega con trazabilidad sanitaria por lote</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a href="almacen.html" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium text-sm transition flex items-center gap-1">
+          <i class="fa-solid fa-warehouse"></i> Almacén
+        </a>
+        <a href="etiquetas.html" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium text-sm transition flex items-center gap-1">
+          <i class="fa-solid fa-barcode"></i> Etiquetas
+        </a>
+        <a href="facturacion.html" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm transition flex items-center gap-1">
+          <i class="fa-solid fa-file-invoice-dollar"></i> Ir a Facturación
+        </a>
+      </div>
+    </div>
+
+    <!-- DATOS DEL CLIENTE Y CABECERA -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
+      <h2 class="text-lg font-semibold text-slate-800 border-b pb-2">1. Datos de la Entrega</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Cliente</label>
+          <select id="selectCliente" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+            <option value="">-- Cargando clientes... --</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Fecha de Salida</label>
+          <input type="date" id="fechaAlbaran" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nº Albarán</label>
+          <input type="text" id="numAlbaran" readonly class="w-full p-2.5 border border-slate-200 bg-slate-50 text-slate-500 rounded-lg text-sm font-mono font-bold">
+        </div>
+      </div>
+    </div>
+
+    <!-- AGREGAR LÍNEA CON TRAZABILIDAD DE LOTE -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
+      <h2 class="text-lg font-semibold text-slate-800 border-b pb-2">2. Añadir Producto y Trazabilidad</h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        
+        <div class="md:col-span-4">
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Producto</label>
+          <input type="text" id="inputProducto" list="dlProductos" onchange="autocompletarPrecio()" placeholder="Escribe para buscar..." class="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+          <datalist id="dlProductos"></datalist>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nº Lote / Cad.</label>
+          <input type="text" id="inputLote" placeholder="Ej: LOT-2026-01" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm font-mono">
+        </div>
+
+        <div class="md:col-span-1">
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Cajas</label>
+          <input type="number" id="inputCajas" value="1" min="1" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm text-center">
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Kilos (kg)</label>
+          <input type="number" step="0.1" id="inputKilos" placeholder="0.00" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm text-right">
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Precio (€/kg)</label>
+          <input type="number" step="0.01" id="inputPrecio" placeholder="0.00" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm text-right">
+        </div>
+
+        <div class="md:col-span-1">
+          <button onclick="agregarLinea()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition shadow-sm flex items-center justify-center">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TABLA DE DETALLE DE ALBARÁN -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+        <h2 class="font-semibold text-slate-700">Detalle de la Entrega</h2>
+        <span id="contadorLineas" class="text-xs bg-slate-200 text-slate-700 px-2.5 py-1 rounded-full font-bold">0 Artículos</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-600">
+          <thead class="bg-slate-100 text-xs text-slate-500 uppercase border-b">
+            <tr>
+              <th class="p-3">Producto</th>
+              <th class="p-3">Lote</th>
+              <th class="p-3 text-center">Cajas</th>
+              <th class="p-3 text-right">Kilos</th>
+              <th class="p-3 text-right">Precio (€/kg)</th>
+              <th class="p-3 text-right">Subtotal (€)</th>
+              <th class="p-3 text-center">Quitar</th>
+            </tr>
+          </thead>
+          <tbody id="tablaLineas" class="divide-y divide-slate-100">
+            <tr><td colspan="7" class="p-6 text-center text-slate-400">No hay productos añadidos al albarán.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- TOTALES Y BOTÓN GUARDAR -->
+      <div class="p-6 bg-slate-50 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div class="flex gap-6 text-sm">
+          <div>Cajas Totales: <span id="lblTotalCajas" class="font-bold text-slate-800">0</span></div>
+          <div>Kilos Totales: <span id="lblTotalKilos" class="font-bold text-slate-800">0.00 kg</span></div>
+          <div class="text-base font-bold text-slate-900">Total Albarán: <span id="lblTotalEuros" class="text-blue-600">0.00 €</span></div>
+        </div>
+
+        <button onclick="guardarEImprimirAlbaran()" id="btnGuardar" disabled class="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl font-bold shadow-sm transition flex items-center gap-2">
+          <i class="fa-solid fa-floppy-disk"></i> Guardar e Imprimir Albarán
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL PDF DEL ALBARÁN CON TRAZABILIDAD -->
+  <div id="modalPDF" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-4 bg-slate-800 text-white flex justify-between items-center">
+        <h3 class="font-bold flex items-center gap-2"><i class="fa-solid fa-file-pdf text-red-400"></i> Albarán de Entrega Generado</h3>
+        <button onclick="cerrarModalPDF()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      
+      <div id="albaranRenderPDF" class="p-8 overflow-y-auto space-y-6 text-slate-800 bg-white">
+        <!-- HEADER -->
+        <div class="flex justify-between border-b pb-4">
+          <div>
+            <h2 class="text-xl font-bold text-blue-900">DISTRIBUCIONES CONGELADOS S.L.</h2>
+            <p class="text-xs text-slate-500">CIF: B-12345678 · Tel: 952 00 00 00</p>
+            <p class="text-xs text-slate-500">Reg. Sanitario: 10.12345/MA</p>
+          </div>
+          <div class="text-right">
+            <span class="inline-block px-3 py-1 bg-slate-100 text-slate-800 text-xs font-bold rounded-md mb-1">ALBARÁN DE ENTREGA</span>
+            <h3 id="pdfNumAlbaran" class="text-lg font-bold text-slate-800">ALB-2026-000</h3>
+            <p id="pdfFecha" class="text-xs text-slate-500">Fecha: --</p>
+          </div>
+        </div>
+
+        <!-- CLIENTE -->
+        <div class="bg-slate-50 p-4 rounded-lg text-xs space-y-1 border border-slate-200">
+          <p class="font-bold text-slate-700 uppercase">Cliente / Destinatario:</p>
+          <p id="pdfClienteNombre" class="text-sm font-bold text-slate-900">--</p>
+          <p id="pdfClienteCif">CIF/NIF: --</p>
+          <p id="pdfClienteDireccion">Dirección: --</p>
+        </div>
+
+        <!-- TABLA DETALLE -->
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b bg-slate-100 text-slate-600">
+              <th class="p-2">Producto</th>
+              <th class="p-2">Lote</th>
+              <th class="p-2 text-center">Cajas</th>
+              <th class="p-2 text-right">Kilos</th>
+              <th class="p-2 text-right">Precio/kg</th>
+              <th class="p-2 text-right">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody id="pdfTablaLineas" class="divide-y divide-slate-100"></tbody>
+        </table>
+
+        <!-- TOTALES Y PIE -->
+        <div class="flex justify-between items-end border-t pt-4">
+          <div class="text-[10px] text-slate-400 max-w-[280px]">
+            <p class="font-bold text-slate-600">CONSERVACIÓN Y CONFORMIDAD:</p>
+            <p>Mantener la cadena de frío a -18ºC. Mercancía entregada en perfectas condiciones sanitarias.</p>
+          </div>
+
+          <div class="text-right space-y-1">
+            <p class="text-xs text-slate-500">Kilos Totales: <span id="pdfTotalKilos" class="font-bold text-slate-800">0.00 kg</span></p>
+            <p class="text-base font-bold text-slate-900">TOTAL: <span id="pdfTotal" class="text-blue-600">0.00 €</span></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-100 border-t flex justify-end gap-2 no-print">
+        <button onclick="descargarPDF()" class="px-5 py-2.5 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700 transition flex items-center gap-2">
+          <i class="fa-solid fa-file-pdf"></i> Descargar PDF
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT LÓGICA SUPABASE -->
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5YnpsdHd4cHdlemF3Zm5rbGdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MjcxMjYsImV4cCI6MjEwMDMwMzEyNn0.Ib17m5wofSx8Z0PCUT2Q_Orx5OTtGyW7W9_EoJupmgY";
+    
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let clientesLista = [];
+    let productosLista = [];
+    let lineasAgregadas = [];
+
+    window.onload = async () => {
+      document.getElementById('fechaAlbaran').value = new Date().toISOString().split('T')[0];
+      document.getElementById('numAlbaran').value = `ALB-2026-${Math.floor(100 + Math.random() * 900)}`;
+      
+      await cargarClientes();
+      await cargarProductos();
+    };
+
+    async function cargarClientes() {
+      const { data } = await dbClient.from('clientes').select('*').order('nombre_comercial');
+      clientesLista = data || [];
+
+      const select = document.getElementById('selectCliente');
+      select.innerHTML = '<option value="">-- Selecciona un cliente --</option>';
+      clientesLista.forEach(c => {
+        select.innerHTML += `<option value="${c.id}">${c.nombre_comercial}</option>`;
+      });
+    }
+
+    async function cargarProductos() {
+      const { data } = await dbClient.from('productos').select('*').order('nombre');
+      productosLista = data || [];
+
+      const dl = document.getElementById('dlProductos');
+      dl.innerHTML = productosLista.map(p => `<option value="${p.nombre}"></option>`).join('');
+    }
+
+    function autocompletarPrecio() {
+      const val = document.getElementById('inputProducto').value;
+      const prod = productosLista.find(p => p.nombre.toLowerCase() === val.toLowerCase());
+      if (prod) {
+        document.getElementById('inputPrecio').value = prod.precio_venta || prod.precio_base || 0;
+      }
+    }
+
+    function agregarLinea() {
+      const prodNom = document.getElementById('inputProducto').value.trim();
+      const lote = document.getElementById('inputLote').value.trim() || 'LOT-2026-GENERAL';
+      const cajas = parseInt(document.getElementById('inputCajas').value) || 0;
+      const kilos = parseFloat(document.getElementById('inputKilos').value) || 0;
+      const precio = parseFloat(document.getElementById('inputPrecio').value) || 0;
+
+      if (!prodNom) return alert("Escribe el nombre del producto.");
+      if (kilos <= 0) return alert("Introduce una cantidad válida de kilos.");
+
+      const subtotal = kilos * precio;
+
+      lineasAgregadas.push({
+        producto: prodNom,
+        lote: lote,
+        cajas: cajas,
+        kilos: kilos,
+        precio: precio,
+        subtotal: subtotal
+      });
+
+      // Limpiar campos
+      document.getElementById('inputProducto').value = "";
+      document.getElementById('inputLote').value = "";
+      document.getElementById('inputCajas').value = "1";
+      document.getElementById('inputKilos').value = "";
+      document.getElementById('inputPrecio').value = "";
+
+      renderizarTablaLineas();
+    }
+
+    function quitarLinea(index) {
+      lineasAgregadas.splice(index, 1);
+      renderizarTablaLineas();
+    }
+
+    function renderizarTablaLineas() {
+      const tbody = document.getElementById('tablaLineas');
+      document.getElementById('contadorLineas').innerText = `${lineasAgregadas.length} Artículos`;
+
+      if (lineasAgregadas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">No hay productos añadidos al albarán.</td></tr>';
+        document.getElementById('btnGuardar').disabled = true;
+        actualizarTotales(0, 0, 0);
+        return;
+      }
+
+      tbody.innerHTML = lineasAgregadas.map((l, i) => `
+        <tr class="hover:bg-slate-50 transition">
+          <td class="p-3 font-semibold text-slate-800">${l.producto}</td>
+          <td class="p-3 font-mono text-xs text-slate-600">${l.lote}</td>
+          <td class="p-3 text-center">${l.cajas}</td>
+          <td class="p-3 text-right font-bold text-slate-800">${l.kilos.toFixed(2)} kg</td>
+          <td class="p-3 text-right">${l.precio.toFixed(2)} €</td>
+          <td class="p-3 text-right font-bold text-blue-600">${l.subtotal.toFixed(2)} €</td>
+          <td class="p-3 text-center">
+            <button onclick="quitarLinea(${i})" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash"></i></button>
+          </td>
+        </tr>
+      `).join('');
+
+      const totalCajas = lineasAgregadas.reduce((sum, l) => sum + l.cajas, 0);
+      const totalKilos = lineasAgregadas.reduce((sum, l) => sum + l.kilos, 0);
+      const totalEuros = lineasAgregadas.reduce((sum, l) => sum + l.subtotal, 0);
+
+      actualizarTotales(totalCajas, totalKilos, totalEuros);
+      document.getElementById('btnGuardar').disabled = false;
+    }
+
+    function actualizarTotales(cajas, kilos, euros) {
+      document.getElementById('lblTotalCajas').innerText = cajas;
+      document.getElementById('lblTotalKilos').innerText = `${kilos.toFixed(2)} kg`;
+      document.getElementById('lblTotalEuros').innerText = `${euros.toFixed(2)} €`;
+    }
+
+    async function guardarEImprimirAlbaran() {
+      const clienteId = document.getElementById('selectCliente').value;
+      if (!clienteId) return alert("Selecciona un cliente.");
+
+      const cliente = clientesLista.find(c => c.id === clienteId);
+      const numAlbaran = document.getElementById('numAlbaran').value;
+      const fecha = document.getElementById('fechaAlbaran').value;
+
+      const totalKilos = lineasAgregadas.reduce((sum, l) => sum + l.kilos, 0);
+      const totalEuros = lineasAgregadas.reduce((sum, l) => sum + l.subtotal, 0);
+
+      // 1. Insertar Albarán en Supabase
+      const { data: albData, error: errAlb } = await dbClient.from('albaranes').insert({
+        cliente_id: clienteId,
+        numero_albaran: numAlbaran,
+        fecha: fecha,
+        total_kilos: totalKilos,
+        total_euros: totalEuros,
+        estado: 'pendiente'
+      }).select().single();
+
+      if (errAlb) return alert("Error al guardar albarán: " + errAlb.message);
+
+      // 2. Insertar Líneas de Albarán
+      const lineasDB = lineasAgregadas.map(l => ({
+        albaran_id: albData.id,
+        kilos: l.kilos,
+        cajas: l.cajas,
+        precio_unitario: l.precio,
+        subtotal: l.subtotal,
+        lote: l.lote
+      }));
+
+      await dbClient.from('lineas_albaran').insert(lineasDB);
+
+      // 3. Descontar stock de los productos
+      for (const l of lineasAgregadas) {
+        const prodMatch = productosLista.find(p => p.nombre.toLowerCase() === l.producto.toLowerCase());
+        if (prodMatch) {
+          const nuevasCajas = Math.max(0, (prodMatch.cajas_stock || 0) - l.cajas);
+          const nuevosKilos = Math.max(0, (parseFloat(prodMatch.kilos_stock) || 0) - l.kilos);
+          
+          await dbClient.from('productos').update({
+            cajas_stock: nuevasCajas,
+            kilos_stock: nuevosKilos
+          }).eq('id', prodMatch.id);
+        }
+      }
+
+      mostrarModalPDF(numAlbaran, fecha, cliente, lineasAgregadas, totalKilos, totalEuros);
+    }
+
+    function mostrarModalPDF(num, fecha, cliente, lineas, totalKilos, totalEuros) {
+      document.getElementById('pdfNumAlbaran').innerText = num;
+      document.getElementById('pdfFecha').innerText = `Fecha: ${fecha}`;
+      document.getElementById('pdfClienteNombre').innerText = cliente.nombre_comercial;
+      document.getElementById('pdfClienteCif').innerText = `CIF/NIF: ${cliente.cif_nif || 'N/A'}`;
+      document.getElementById('pdfClienteDireccion').innerText = `Dirección: ${cliente.direccion || 'N/A'}`;
+
+      document.getElementById('pdfTotalKilos').innerText = `${totalKilos.toFixed(2)} kg`;
+      document.getElementById('pdfTotal').innerText = `${totalEuros.toFixed(2)} €`;
+
+      const tbody = document.getElementById('pdfTablaLineas');
+      tbody.innerHTML = lineas.map(l => `
+        <tr>
+          <td class="p-2 font-bold">${l.producto}</td>
+          <td class="p-2 font-mono text-slate-500">${l.lote}</td>
+          <td class="p-2 text-center">${l.cajas}</td>
+          <td class="p-2 text-right">${l.kilos.toFixed(2)} kg</td>
+          <td class="p-2 text-right">${l.precio.toFixed(2)} €</td>
+          <td class="p-2 text-right font-bold">${l.subtotal.toFixed(2)} €</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('modalPDF').classList.remove('hidden');
+      document.getElementById('modalPDF').classList.add('flex');
+    }
+
+    function cerrarModalPDF() {
+      document.getElementById('modalPDF').classList.add('hidden');
+      document.getElementById('modalPDF').classList.remove('flex');
+      window.location.reload();
+    }
+
+    function descargarPDF() {
+      const elemento = document.getElementById('albaranRenderPDF');
+      const opt = {
+        margin:       10,
+        filename:     `${document.getElementById('pdfNumAlbaran').innerText}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      html2pdf().set(opt).from(elemento).save();
+    }
+  </script>
+</body>
+</html>
