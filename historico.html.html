@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Histórico de Albaranes - ERP Distribución</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 p-4 md:p-8">
+
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- CABECERA -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          📜 Histórico de Albaranes
+        </h1>
+        <p class="text-sm text-gray-500">Consulta, ordenación y descarga de albaranes registrados</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="albaranes.html" class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-medium transition shadow-sm">➕ Emitir Nuevo Albarán</a>
+      </div>
+    </div>
+
+    <!-- BARRA DE BÚSQUEDA Y ORDENACIÓN -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="w-full md:w-1/2">
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Buscar por cliente o nº albarán</label>
+        <input type="text" id="searchInput" oninput="filtrarYOrdenarHistórico()" placeholder="🔍 Escribe para buscar..." class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-semibold">
+      </div>
+
+      <!-- SELECTOR DE ORDENACIÓN -->
+      <div class="w-full md:w-1/3">
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Ordenar por</label>
+        <select id="ordenSelect" onchange="filtrarYOrdenarHistórico()" class="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-sm font-semibold text-gray-800">
+          <option value="fecha_desc">📅 Más reciente a más antiguo</option>
+          <option value="fecha_asc">📅 Más antiguo a más reciente</option>
+          <option value="importe_desc">💶 Mayor a menor importe</option>
+          <option value="importe_asc">💶 Menor a mayor importe</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- TABLA DE HISTÓRICO -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left text-gray-600">
+          <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+            <tr>
+              <th class="py-3 px-4">Nº Albarán</th>
+              <th class="py-3 px-4">Cliente</th>
+              <th class="py-3 px-4">Fecha</th>
+              <th class="py-3 px-4 text-center">Cajas</th>
+              <th class="py-3 px-4 text-center">Kilos</th>
+              <th class="py-3 px-4 text-right">Total (€)</th>
+              <th class="py-3 px-4 text-center">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="historicoBody">
+            <tr><td colspan="7" class="text-center py-8 text-gray-400">Cargando histórico...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://cybzltwxpwezawfnklgd.supabase.co'; 
+    const SUPABASE_KEY = 'sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_'; 
+
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let historicoRaw = [];
+
+    document.addEventListener('DOMContentLoaded', cargarHistorico);
+
+    async function cargarHistorico() {
+      const { data: albaranes, error } = await db.from('albaranes').select('*');
+      const { data: clientes } = await db.from('clientes').select('*');
+
+      if (error || !albaranes) {
+        document.getElementById('historicoBody').innerHTML = '<tr><td colspan="7" class="text-center py-8 text-red-500">Error cargando el histórico.</td></tr>';
+        return;
+      }
+
+      // Unir cliente y campos
+      historicoRaw = albaranes.map(a => {
+        const cli = clientes ? clientes.find(c => c.id === a.cliente_id) : null;
+        const nombreCliente = cli ? (cli.nombre_comercial || cli.nombre || cli.razon_social || 'Cliente') : 'Cliente Desconocido';
+        const importe = Number(a.total_importe || a.total || 0);
+        const fecha = a.fecha_salida || a.fecha || a.created_at || '2026-01-01';
+
+        return {
+          ...a,
+          cliente_nombre: nombreCliente,
+          importeNum: importe,
+          fechaStr: fecha
+        };
+      });
+
+      filtrarYOrdenarHistórico();
+    }
+
+    function filtrarYOrdenarHistórico() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      const criterio = document.getElementById('ordenSelect').value;
+
+      let resultado = historicoRaw.filter(item => 
+        (item.numero_albaran && item.numero_albaran.toLowerCase().includes(query)) ||
+        (item.cliente_nombre && item.cliente_nombre.toLowerCase().includes(query))
+      );
+
+      // Aplicar criterio de ordenación seleccionado
+      resultado.sort((a, b) => {
+        if (criterio === 'fecha_desc') return new Date(b.fechaStr) - new Date(a.fechaStr);
+        if (criterio === 'fecha_asc') return new Date(a.fechaStr) - new Date(b.fechaStr);
+        if (criterio === 'importe_desc') return b.importeNum - a.importeNum;
+        if (criterio === 'importe_asc') return a.importeNum - b.importeNum;
+        return 0;
+      });
+
+      renderizarTablaHistorico(resultado);
+    }
+
+    function renderizarTablaHistorico(lista) {
+      const tbody = document.getElementById('historicoBody');
+      tbody.innerHTML = '';
+
+      if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">No se encontraron albaranes.</td></tr>';
+        return;
+      }
+
+      lista.forEach(a => {
+        tbody.innerHTML += `
+          <tr class="border-b bg-white hover:bg-gray-50">
+            <td class="py-3 px-4 font-bold text-blue-900">${a.numero_albaran || 'ALB-000'}</td>
+            <td class="py-3 px-4 font-semibold text-gray-800">${a.cliente_nombre}</td>
+            <td class="py-3 px-4 text-xs font-mono text-gray-500">${a.fechaStr.split('T')[0]}</td>
+            <td class="py-3 px-4 text-center font-semibold">${a.total_cajas || 0}</td>
+            <td class="py-3 px-4 text-center font-semibold">${Number(a.total_kilos || 0).toFixed(2)} kg</td>
+            <td class="py-3 px-4 text-right font-bold text-emerald-700">${a.importeNum.toFixed(2)} €</td>
+            <td class="py-3 px-4 text-center">
+              <span class="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-full uppercase">${a.estado || 'pendiente'}</span>
+            </td>
+          </tr>`;
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Albaranes - ERP Distribución</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- html2pdf JS para generación de PDFs limpios -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 p-4 md:p-8">
+
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- CABECERA PRINCIPAL -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          🚚 Emisión de Albaranes
+        </h1>
+        <p class="text-sm text-gray-500">Generación de notas de entrega y trazabilidad</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="historico.html" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">📜 Histórico</a>
+        <a href="hoja_carga.html" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">📦 Hoja de Carga</a>
+        <a href="facturacion.html" class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-medium">📄 Facturación</a>
+      </div>
+    </div>
+
+    <!-- BLOQUE 1: DATOS DE LA ENTREGA -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+      <h2 class="text-lg font-bold text-gray-800 border-b pb-2">1. Datos de la Entrega</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="relative">
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cliente</label>
+          <input type="text" id="clienteInput" placeholder="🔍 Escribe para buscar cliente..." oninput="filtrarClientes()" onfocus="filtrarClientes()" autocomplete="off" class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg p-2.5 font-semibold focus:ring-blue-500 focus:border-blue-500">
+          <input type="hidden" id="clienteIdHidden">
+          <div id="clienteResults" class="hidden absolute z-50 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto mt-1"></div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fecha</label>
+          <input type="date" id="fechaSalidaInput" class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg p-2.5">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nº Albarán</label>
+          <input type="text" id="numAlbaranInput" readonly class="w-full bg-gray-200 border border-gray-300 text-gray-600 rounded-lg p-2.5 font-bold cursor-not-allowed">
+        </div>
+      </div>
+    </div>
+
+    <!-- BLOQUE 2: AÑADIR PRODUCTO -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+      <h2 class="text-lg font-bold text-gray-800 border-b pb-2">2. Añadir Producto y Trazabilidad</h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div class="md:col-span-4 relative">
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Producto</label>
+          <input type="text" id="productoInput" placeholder="🔍 Escribe nombre o tipo..." oninput="filtrarProductos()" onfocus="filtrarProductos()" autocomplete="off" class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg p-2.5 font-semibold focus:ring-blue-500 focus:border-blue-500">
+          <input type="hidden" id="productoIdHidden">
+          <div id="productoResults" class="hidden absolute z-50 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto mt-1"></div>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nº Lote / Cad.</label>
+          <input type="text" id="loteInput" value="LOT-2026-GENERAL" class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg p-2.5">
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cajas</label>
+          <input type="number" id="cajasInput" min="1" value="1" oninput="calcularKilos()" class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg p-2.5 font-semibold">
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Kilos (KG)</label>
+          <input type="number" id="kilosInput" step="0.01" value="0.00" class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg p-2.5 font-semibold">
+        </div>
+
+        <div class="md:col-span-1">
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Precio (€/KG)</label>
+          <input type="number" id="precioInput" step="0.01" value="0.00" class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg p-2.5 font-semibold">
+        </div>
+
+        <div class="md:col-span-1">
+          <button type="button" onclick="agregarLineaAlbaran()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-2.5 rounded-lg">
+            ➕
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLOQUE 3: DETALLE -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+      <h2 class="text-lg font-bold text-gray-800 border-b pb-2">Detalle de la Entrega</h2>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left text-gray-600">
+          <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+            <tr>
+              <th class="py-3 px-4">Producto</th>
+              <th class="py-3 px-4">Lote</th>
+              <th class="py-3 px-4 text-center">Cajas</th>
+              <th class="py-3 px-4 text-center">Kilos</th>
+              <th class="py-3 px-4 text-right">Precio (€/KG)</th>
+              <th class="py-3 px-4 text-right">Subtotal (€)</th>
+              <th class="py-3 px-4 text-center">Quitar</th>
+            </tr>
+          </thead>
+          <tbody id="tablaLineasBody">
+            <tr><td colspan="7" class="text-center py-8 text-gray-400">No hay productos añadidos al albarán.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-col md:flex-row justify-between items-center pt-4 border-t gap-4">
+        <div class="flex gap-6 text-sm font-medium text-gray-700">
+          <div>Cajas: <span id="totalCajasSpan" class="font-bold">0</span></div>
+          <div>Kilos: <span id="totalKilosSpan" class="font-bold">0.00 kg</span></div>
+          <div>Total: <span id="totalImporteSpan" class="font-bold text-blue-700 text-lg">0.00 €</span></div>
+        </div>
+
+        <button type="button" onclick="guardarEImprimirAlbaran()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-6 py-3 rounded-xl shadow-md flex items-center gap-2">
+          💾 Guardar e Imprimir Albarán
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PLANTILLA OCULTA FORMATO A4 PARA GENERACIÓN DE PDF -->
+  <div id="pdfRenderContainer" class="hidden">
+    <div id="pdfTemplate" style="padding: 30px; font-family: sans-serif; color: #1f2937; background: #fff; width: 794px; min-height: 1123px; box-sizing: border-box;">
+      
+      <!-- Cabecera del PDF -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1e3a8a; padding-bottom: 20px; margin-bottom: 25px;">
+        <div>
+          <h1 style="font-size: 22px; font-weight: bold; color: #1e3a8a; margin: 0;">DISTRIBUCIONES CONGELADOS S.L.</h1>
+          <p style="font-size: 11px; color: #6b7280; margin: 4px 0 0 0;">Venta y Distribución de Pescados y Mariscos Congelados</p>
+        </div>
+        <div style="text-align: right;">
+          <div style="background: #eff6ff; padding: 6px 14px; border-radius: 6px; display: inline-block;">
+            <span style="font-size: 10px; font-weight: bold; color: #1e40af; text-transform: uppercase;">ALBARÁN DE ENTREGA</span>
+            <h2 id="pdfNumAlbaran" style="font-size: 16px; font-weight: bold; color: #1e3a8a; margin: 2px 0 0 0;">ALB-2026-000</h2>
+          </div>
+          <p id="pdfFecha" style="font-size: 11px; font-weight: 600; color: #374151; margin: 6px 0 0 0;">Fecha: 00/00/0000</p>
+        </div>
+      </div>
+
+      <!-- Datos del Cliente -->
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 25px;">
+        <span style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase;">CLIENTE / DESTINATARIO</span>
+        <h3 id="pdfNombreCliente" style="font-size: 16px; font-weight: bold; color: #0f172a; margin: 4px 0 0 0;">-</h3>
+      </div>
+
+      <!-- Tabla de Artículos -->
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 12px;">
+        <thead>
+          <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1; text-align: left; color: #334155;">
+            <th style="padding: 10px;">Producto</th>
+            <th style="padding: 10px;">Lote</th>
+            <th style="padding: 10px; text-align: center;">Cajas</th>
+            <th style="padding: 10px; text-align: center;">Kilos</th>
+            <th style="padding: 10px; text-align: right;">Precio (€/kg)</th>
+            <th style="padding: 10px; text-align: right;">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody id="pdfTablaBody">
+          <!-- Filas dinámicas -->
+        </tbody>
+      </table>
+
+      <!-- Resumen y Firmas -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px; border-top: 2px solid #e2e8f0; padding-top: 20px;">
+        <div style="width: 45%; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 15px; text-align: center; height: 100px;">
+          <span style="font-size: 10px; font-weight: bold; color: #94a3b8; text-transform: uppercase;">Firma / Sello de Recepción</span>
+        </div>
+        <div style="width: 40%; background: #f8fafc; border-radius: 8px; padding: 15px; text-align: right;">
+          <p style="margin: 4px 0; font-size: 12px; color: #475569;">Total Cajas: <strong id="pdfTotalCajas" style="color: #0f172a;">0</strong></p>
+          <p style="margin: 4px 0; font-size: 12px; color: #475569;">Total Kilos: <strong id="pdfTotalKilos" style="color: #0f172a;">0.00 kg</strong></p>
+          <p style="margin: 8px 0 0 0; font-size: 16px; font-weight: bold; color: #1e3a8a; border-top: 1px solid #e2e8f0; padding-top: 6px;">Total Albarán: <span id="pdfTotalImporte">0.00 €</span></p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://cybzltwxpwezawfnklgd.supabase.co'; 
+    const SUPABASE_KEY = 'sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_'; 
+
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let clientesCache = [];
+    let productosCache = [];
+    let lineasAlbaran = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('fechaSalidaInput').value = new Date().toISOString().split('T')[0];
+      document.getElementById('numAlbaranInput').value = `ALB-2026-${Math.floor(Math.random() * 900 + 100)}`;
+
+      cargarClientes();
+      cargarProductos();
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#clienteInput') && !e.target.closest('#clienteResults')) {
+          document.getElementById('clienteResults').classList.add('hidden');
+        }
+        if (!e.target.closest('#productoInput') && !e.target.closest('#productoResults')) {
+          document.getElementById('productoResults').classList.add('hidden');
+        }
+      });
+    });
+
+    function extraerNombreCliente(c) {
+      return c.nombre_comercial || c.nombre || c.nombre_cliente || c.razon_social || c.empresa || c.cliente || c.denominacion || c.alias || Object.values(c).find(v => typeof v === 'string' && v.length > 2 && !v.includes('-')) || `Cliente #${c.id}`;
+    }
+
+    function extraerNombreProducto(p) {
+      return p.nombre || p.nombre_producto || p.producto || p.descripcion || p.denominacion || Object.values(p).find(v => typeof v === 'string' && v.length > 2 && !v.includes('-')) || `Producto #${p.id}`;
+    }
+
+    async function cargarClientes() {
+      const { data } = await db.from('clientes').select('*');
+      if (data) clientesCache = data;
+    }
+
+    async function cargarProductos() {
+      const { data } = await db.from('productos').select('*');
+      if (data) productosCache = data;
+    }
+
+    function filtrarClientes() {
+      const query = document.getElementById('clienteInput').value.toLowerCase().trim();
+      const resultsDiv = document.getElementById('clienteResults');
+      resultsDiv.innerHTML = '';
+
+      const filtrados = clientesCache.filter(c => extraerNombreCliente(c).toLowerCase().includes(query));
+
+      if (filtrados.length === 0) {
+        resultsDiv.innerHTML = '<div class="p-3 text-sm text-gray-400">Sin resultados</div>';
+      } else {
+        filtrados.forEach(c => {
+          const nombre = extraerNombreCliente(c);
+          const item = document.createElement('div');
+          item.className = 'p-2.5 hover:bg-blue-50 cursor-pointer text-sm font-semibold text-gray-800 border-b border-gray-100';
+          item.innerText = nombre;
+          item.onclick = () => {
+            document.getElementById('clienteInput').value = nombre;
+            document.getElementById('clienteIdHidden').value = c.id;
+            resultsDiv.classList.add('hidden');
+          };
+          resultsDiv.appendChild(item);
+        });
+      }
+      resultsDiv.classList.remove('hidden');
+    }
+
+    function filtrarProductos() {
+      const query = document.getElementById('productoInput').value.toLowerCase().trim();
+      const resultsDiv = document.getElementById('productoResults');
+      resultsDiv.innerHTML = '';
+
+      const filtrados = productosCache.filter(p => extraerNombreProducto(p).toLowerCase().includes(query));
+
+      if (filtrados.length === 0) {
+        resultsDiv.innerHTML = '<div class="p-3 text-sm text-gray-400">Sin resultados</div>';
+      } else {
+        filtrados.forEach(p => {
+          const nombre = extraerNombreProducto(p);
+          const precio = p.precio_base || p.precio || 0;
+          const item = document.createElement('div');
+          item.className = 'p-2.5 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-100 flex justify-between items-center';
+          item.innerHTML = `<span class="font-bold text-gray-800">${nombre}</span> <span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-mono">${precio} €/kg</span>`;
+          item.onclick = () => {
+            document.getElementById('productoInput').value = nombre;
+            document.getElementById('productoIdHidden').value = p.id;
+            document.getElementById('precioInput').value = Number(precio).toFixed(2);
+            resultsDiv.classList.add('hidden');
+            calcularKilos();
+          };
+          resultsDiv.appendChild(item);
+        });
+      }
+      resultsDiv.classList.remove('hidden');
+    }
+
+    function calcularKilos() {
+      const id = document.getElementById('productoIdHidden').value;
+      const prod = productosCache.find(p => p.id === id);
+      const cajas = Number(document.getElementById('cajasInput').value) || 0;
+      if (prod) {
+        const pesoCaja = prod.peso_caja_kg || prod.peso_caja || prod.kilos_caja || 12;
+        document.getElementById('kilosInput').value = (cajas * pesoCaja).toFixed(2);
+      }
+    }
+
+    function agregarLineaAlbaran() {
+      const clienteId = document.getElementById('clienteIdHidden').value;
+      const productoId = document.getElementById('productoIdHidden').value;
+      if (!clienteId || !productoId) { alert("⚠️ Selecciona un cliente y un producto válidos."); return; }
+
+      const prod = productosCache.find(p => p.id === productoId);
+      const cajas = Number(document.getElementById('cajasInput').value) || 0;
+      const kilos = Number(document.getElementById('kilosInput').value) || 0;
+      const precio = Number(document.getElementById('precioInput').value) || 0;
+
+      const nombre = extraerNombreProducto(prod);
+
+      lineasAlbaran.push({
+        producto_id: prod.id,
+        nombre: nombre,
+        lote: document.getElementById('loteInput').value,
+        cajas, kilos, precio_kg: precio,
+        subtotal: kilos * precio
+      });
+
+      document.getElementById('productoInput').value = '';
+      document.getElementById('productoIdHidden').value = '';
+      document.getElementById('kilosInput').value = '0.00';
+      document.getElementById('precioInput').value = '0.00';
+
+      renderizarTabla();
+    }
+
+    function renderizarTabla() {
+      const tbody = document.getElementById('tablaLineasBody');
+      tbody.innerHTML = '';
+      let tCajas = 0, tKilos = 0, tImp = 0;
+
+      lineasAlbaran.forEach((l, i) => {
+        tCajas += l.cajas; tKilos += l.kilos; tImp += l.subtotal;
+        tbody.innerHTML += `
+          <tr class="border-b bg-white">
+            <td class="py-3 px-4 font-bold">${l.nombre}</td>
+            <td class="py-3 px-4 text-xs font-mono">${l.lote}</td>
+            <td class="py-3 px-4 text-center">${l.cajas}</td>
+            <td class="py-3 px-4 text-center">${l.kilos.toFixed(2)} kg</td>
+            <td class="py-3 px-4 text-right">${l.precio_kg.toFixed(2)} €</td>
+            <td class="py-3 px-4 text-right font-bold">${l.subtotal.toFixed(2)} €</td>
+            <td class="py-3 px-4 text-center"><button onclick="lineasAlbaran.splice(${i},1);renderizarTabla()" class="text-red-500">🗑️</button></td>
+          </tr>`;
+      });
+
+      document.getElementById('totalCajasSpan').innerText = tCajas;
+      document.getElementById('totalKilosSpan').innerText = tKilos.toFixed(2) + ' kg';
+      document.getElementById('totalImporteSpan').innerText = tImp.toFixed(2) + ' €';
+    }
+
+    // GUARDADO + GENERACIÓN AUTOMÁTICA DE PDF + IMPRESIÓN
+    async function guardarEImprimirAlbaran() {
+      const clienteId = document.getElementById('clienteIdHidden').value;
+      const clienteNombre = document.getElementById('clienteInput').value;
+
+      if (!clienteId || lineasAlbaran.length === 0) { 
+        alert("⚠️ Selecciona un cliente y añade productos antes de guardar."); 
+        return; 
+      }
+
+      const { data: emp } = await db.from('empresas').select('id').limit(1);
+      if (!emp || emp.length === 0) { alert("⚠️ No hay empresa registrada en Supabase."); return; }
+
+      const numAlb = document.getElementById('numAlbaranInput').value;
+      const fechaVal = document.getElementById('fechaSalidaInput').value;
+
+      // 1. Inserción adaptativa en Supabase
+      const { data: muestraAlbaran } = await db.from('albaranes').select('*').limit(1);
+      const columnasAlb = muestraAlbaran && muestraAlbaran.length > 0 ? Object.keys(muestraAlbaran[0]) : [];
+
+      let payloadAlbaran = { empresa_id: emp[0].id, cliente_id: clienteId, numero_albaran: numAlb, estado: 'pendiente' };
+      if (columnasAlb.includes('fecha_salida')) payloadAlbaran.fecha_salida = fechaVal;
+      else if (columnasAlb.includes('fecha')) payloadAlbaran.fecha = fechaVal;
+
+      const totCajas = lineasAlbaran.reduce((a,b)=>a+b.cajas,0);
+      const totKilos = lineasAlbaran.reduce((a,b)=>a+b.kilos,0);
+      const totImporte = lineasAlbaran.reduce((a,b)=>a+b.subtotal,0);
+
+      if (columnasAlb.includes('total_cajas')) payloadAlbaran.total_cajas = totCajas;
+      if (columnasAlb.includes('total_kilos')) payloadAlbaran.total_kilos = totKilos;
+      if (columnasAlb.includes('total_importe')) payloadAlbaran.total_importe = totImporte;
+
+      const { data: alb, error: errAlb } = await db.from('albaranes').insert([payloadAlbaran]).select().single();
+      if (errAlb) { alert("Error guardando albarán: " + errAlb.message); return; }
+
+      // 2. Inserción de líneas
+      const { data: muestraLineas } = await db.from('lineas_albaran').select('*').limit(1);
+      const columnasLin = muestraLineas && muestraLineas.length > 0 ? Object.keys(muestraLineas[0]) : [];
+
+      const payloadLineas = lineasAlbaran.map(l => {
+        let linObj = { albaran_id: alb.id, producto_id: l.producto_id };
+        if (columnasLin.includes('lote')) linObj.lote = l.lote;
+        if (columnasLin.includes('cajas')) linObj.cajas = l.cajas;
+        if (columnasLin.includes('kilos')) linObj.kilos = l.kilos;
+        if (columnasLin.includes('precio_kg')) linObj.precio_kg = l.precio_kg;
+        if (columnasLin.includes('subtotal')) linObj.subtotal = l.subtotal;
+        return linObj;
+      });
+
+      await db.from('lineas_albaran').insert(payloadLineas);
+
+      // 3. GENERAR Y ABRIR PDF
+      generarEImprimirPDF(numAlb, fechaVal, clienteNombre, totCajas, totKilos, totImporte);
+
+      // Resetear pantalla
+      lineasAlbaran = [];
+      document.getElementById('clienteInput').value = '';
+      document.getElementById('clienteIdHidden').value = '';
+      document.getElementById('numAlbaranInput').value = `ALB-2026-${Math.floor(Math.random() * 900 + 100)}`;
+      renderizarTabla();
+    }
+
+    function generarEImprimirPDF(numAlb, fecha, cliente, c, k, imp) {
+      document.getElementById('pdfNumAlbaran').innerText = numAlb;
+      document.getElementById('pdfFecha').innerText = 'Fecha: ' + fecha;
+      document.getElementById('pdfNombreCliente').innerText = cliente;
+      document.getElementById('pdfTotalCajas').innerText = c;
+      document.getElementById('pdfTotalKilos').innerText = k.toFixed(2) + ' kg';
+      document.getElementById('pdfTotalImporte').innerText = imp.toFixed(2) + ' €';
+
+      const pdfBody = document.getElementById('pdfTablaBody');
+      pdfBody.innerHTML = '';
+
+      lineasAlbaran.forEach(l => {
+        pdfBody.innerHTML += `
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 8px 10px; font-weight: bold;">${l.nombre}</td>
+            <td style="padding: 8px 10px; font-family: monospace;">${l.lote}</td>
+            <td style="padding: 8px 10px; text-align: center;">${l.cajas}</td>
+            <td style="padding: 8px 10px; text-align: center;">${l.kilos.toFixed(2)} kg</td>
+            <td style="padding: 8px 10px; text-align: right;">${l.precio_kg.toFixed(2)} €</td>
+            <td style="padding: 8px 10px; text-align: right; font-weight: bold;">${l.subtotal.toFixed(2)} €</td>
+          </tr>`;
+      });
+
+      const element = document.getElementById('pdfTemplate');
+      const container = document.getElementById('pdfRenderContainer');
+      container.classList.remove('hidden');
+
+      const opt = {
+        margin:       0,
+        filename:     `${numAlb}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(opt).from(element).toPdf().get('pdf').then(function(pdfObj) {
+        container.classList.add('hidden');
+        pdfObj.autoPrint();
+        window.open(pdfObj.output('bloburl'), '_blank');
+      });
+    }
+  </script>
+</body>
+</html>
