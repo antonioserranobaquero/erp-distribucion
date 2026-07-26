@@ -1,7 +1,0 @@
-Panel General / Dashboard: [https://erp-distribucion.vercel.app](https://erp-distribucion.vercel.app)
-
-App Móvil Repartidor: [https://erp-distribucion.vercel.app/repartidor.html](https://erp-distribucion.vercel.app/repartidor.html)
-
-Gestión de Albaranes: [https://erp-distribucion.vercel.app/albaranes.html](https://erp-distribucion.vercel.app/albaranes.html)
-
-Facturación Oficial: [https://erp-distribucion.vercel.app/facturas.html](https://erp-distribucion.vercel.app/facturas.html)
