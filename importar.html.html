@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Importador CSV - ERP Distribución</title>
+
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
+
+  <!-- NAVBAR UNIFICADO -->
+  <nav class="bg-gray-900 text-white shadow-lg mb-6 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex justify-between h-16 items-center">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">❄️</span>
+          <div>
+            <a href="index.html" class="font-extrabold text-base tracking-wide text-white hover:text-blue-400 transition">ERP CONGELADOS</a>
+            <span class="block text-[10px] text-gray-400 font-normal -mt-1">Sistema ERP Integral & Trazabilidad</span>
+          </div>
+        </div>
+        <div class="hidden xl:flex items-center space-x-1 text-xs font-semibold">
+          <a href="index.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🏠 Inicio</a>
+          <a href="albaranes.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🚚 Albaranes</a>
+          <a href="historico.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📜 Histórico</a>
+          <a href="hoja_carga.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📦 Hoja Carga</a>
+          <a href="rutas.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🗺️ Rutas</a>
+          <a href="repartidor.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🛵 Reparto</a>
+          <a href="facturacion.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">⚖️ Facturación</a>
+          <a href="facturas.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📄 Facturas</a>
+          <a href="almacen.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📦 Almacén</a>
+          <a href="productos.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🏷️ Productos</a>
+          <a href="compras.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🛒 Compras</a>
+          <a href="clientes.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">👥 Clientes</a>
+          <a href="estadisticas.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📊 Analítica</a>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="configuracion.html" title="Configuración" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition text-sm">⚙️</a>
+          <button id="btnLogout" title="Cerrar Sesión" class="p-2 rounded-lg bg-rose-900/50 hover:bg-rose-800 text-rose-200 transition text-sm font-bold">🚪</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="max-w-4xl mx-auto space-y-6 px-4">
+
+    <!-- CABECERA -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div>
+        <h1 class="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-file-csv text-blue-600"></i> Importador de Datos CSV / Excel
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Carga masiva de clientes, productos y registros en Supabase</p>
+      </div>
+      <a href="index.html" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">
+        ⬅️ Volver al Inicio
+      </a>
+    </div>
+
+    <!-- FORMULARIO SELECCIÓN -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Tabla de destino en la BD</label>
+          <select id="tablaSelect" class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl p-3 text-xs font-bold">
+            <option value="clientes">👥 Tabla: Clientes</option>
+            <option value="productos">🏷️ Tabla: Productos</option>
+            <option value="albaranes">🚚 Tabla: Albaranes</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1">2. Selecciona tu archivo (.csv)</label>
+          <input type="file" id="csvFileInput" accept=".csv" class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl p-2 text-xs font-semibold">
+        </div>
+      </div>
+
+      <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-1">
+        <p class="font-bold">⚠️ Requisitos para la importación:</p>
+        <p>• La primera fila del CSV debe incluir exactamente los encabezados de la tabla.</p>
+        <p>• Codificación UTF-8 y separación por comas (,) o punto y coma (;).</p>
+      </div>
+
+      <button type="button" onclick="procesarEImportarCSV()" class="w-full bg-blue-900 hover:bg-blue-800 text-white font-bold py-3.5 px-6 rounded-xl shadow transition text-xs flex items-center justify-center gap-2">
+        🚀 Cargar Datos en Base de Datos
+      </button>
+    </div>
+
+    <div id="resultadoBox" class="hidden bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+      <h3 class="font-bold text-slate-800 text-sm">Estado de la Importación</h3>
+      <div id="resultadoTexto" class="p-4 rounded-xl text-xs font-mono bg-slate-50 border border-slate-200 text-slate-700 max-h-60 overflow-y-auto"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function procesarEImportarCSV() {
+      const fileInput = document.getElementById('csvFileInput');
+      const tabla = document.getElementById('tablaSelect').value;
+      const resBox = document.getElementById('resultadoBox');
+      const resTxt = document.getElementById('resultadoTexto');
+
+      if (!fileInput.files || fileInput.files.length === 0) {
+        alert("⚠️ Por favor selecciona un archivo CSV primero.");
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+
+      resBox.classList.remove('hidden');
+      resTxt.innerText = "⏳ Procesando e insertando registros en la tabla '" + tabla + "'...";
+
+      reader.onload = async function(e) {
+        const text = e.target.result;
+        const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
+
+        if (lines.length < 2) {
+          resTxt.innerText = "❌ El archivo no contiene datos o le faltan los encabezados.";
+          return;
+        }
+
+        const separador = lines[0].includes(';') ? ';' : ',';
+        const headers = lines[0].split(separador).map(h => h.trim().replace(/^"|"$/g, ''));
+
+        const payload = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(separador).map(v => v.trim().replace(/^"|"$/g, ''));
+          if (values.length === headers.length) {
+            let rowObj = {};
+            headers.forEach((h, index) => {
+              rowObj[h] = values[index];
+            });
+            payload.push(rowObj);
+          }
+        }
+
+        if (payload.length === 0) {
+          resTxt.innerText = "❌ No se pudieron estructurar las filas del CSV correctamente.";
+          return;
+        }
+
+        const { error } = await db.from(tabla).insert(payload);
+
+        if (error) {
+          resTxt.innerText = "❌ Error insertando datos en Supabase: " + error.message;
+        } else {
+          resTxt.innerText = `🎉 ¡Importación completada con éxito!\nSe han insertado ${payload.length} registros en la tabla '${tabla}'.`;
+          fileInput.value = '';
+        }
+      };
+
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Reparto y Firma Digital - ERP Distribución</title>
+
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
+
+  <!-- NAVBAR UNIFICADO -->
+  <nav class="bg-gray-900 text-white shadow-lg mb-6 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex justify-between h-16 items-center">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">❄️</span>
+          <div>
+            <a href="index.html" class="font-extrabold text-base tracking-wide text-white hover:text-blue-400 transition">ERP CONGELADOS</a>
+            <span class="block text-[10px] text-gray-400 font-normal -mt-1">Sistema ERP Integral & Trazabilidad</span>
+          </div>
+        </div>
+        <div class="hidden xl:flex items-center space-x-1 text-xs font-semibold">
+          <a href="index.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🏠 Inicio</a>
+          <a href="albaranes.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🚚 Albaranes</a>
+          <a href="historico.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📜 Histórico</a>
+          <a href="hoja_carga.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📦 Hoja Carga</a>
+          <a href="rutas.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🗺️ Rutas</a>
+          <a href="repartidor.html" class="px-3 py-2 rounded-lg bg-blue-700 text-white font-bold transition flex items-center gap-1">🛵 Reparto</a>
+          <a href="facturacion.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">⚖️ Facturación</a>
+          <a href="facturas.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📄 Facturas</a>
+          <a href="almacen.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📦 Almacén</a>
+          <a href="productos.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🏷️ Productos</a>
+          <a href="compras.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🛒 Compras</a>
+          <a href="clientes.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">👥 Clientes</a>
+          <a href="estadisticas.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📊 Analítica</a>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="configuracion.html" title="Configuración" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition text-sm">⚙️</a>
+          <button id="btnLogout" title="Cerrar Sesión" class="p-2 rounded-lg bg-rose-900/50 hover:bg-rose-800 text-rose-200 transition text-sm font-bold">🚪</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="max-w-7xl mx-auto space-y-6 px-4">
+
+    <!-- CABECERA Y FILTROS -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div>
+        <h1 class="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-truck-ramp-box text-blue-600"></i> Control de Entregas y Repartidores
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Gestión in situ de entregas, incidencias [*], fotos de prueba y firma táctil</p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Filtrar por Ruta / Repartidor</label>
+          <select id="filtroRepartidor" onchange="cargarAlbaranesRuta()" class="bg-slate-50 border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-800">
+            <option value="TODOS">🚚 Todas las Rutas / Repartidores</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Fecha</label>
+          <input type="date" id="filtroFecha" onchange="cargarAlbaranesRuta()" class="bg-slate-50 border border-slate-300 rounded-xl p-2 text-xs font-semibold text-slate-800">
+        </div>
+      </div>
+    </div>
+
+    <!-- LISTADO DE ALBARANES -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <h2 class="text-base font-extrabold text-slate-900 flex items-center gap-2">
+        📦 Albaranes Asignados para Entrega Hoy
+      </h2>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left text-slate-600">
+          <thead class="text-xs text-slate-500 uppercase bg-slate-100 border-b">
+            <tr>
+              <th class="py-3 px-4">Nº Albarán</th>
+              <th class="py-3 px-4">Cliente / Destinatario</th>
+              <th class="py-3 px-4">Asignar Repartidor</th>
+              <th class="py-3 px-4 text-center">Bultos / Kilos</th>
+              <th class="py-3 px-4 text-right">Total (€)</th>
+              <th class="py-3 px-4 text-center">Estado Entrega</th>
+              <th class="py-3 px-4 text-center">Acciones / Firma</th>
+            </tr>
+          </thead>
+          <tbody id="tablaRutaBody" class="divide-y divide-slate-100">
+            <tr><td colspan="7" class="text-center py-8 text-slate-400">Cargando albaranes de ruta...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL VISOR Y FIRMA -->
+  <div id="modalVisor" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div class="bg-gray-900 text-white p-4 flex justify-between items-center print:hidden">
+        <h3 class="font-bold text-lg">✍️ Vista Previa y Firma Digital</h3>
+        <div class="flex items-center gap-3">
+          <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition">🖨️ Imprimir</button>
+          <button onclick="cerrarVisor()" class="text-gray-400 hover:text-white font-bold text-xl px-2">✕</button>
+        </div>
+      </div>
+      <div class="p-8 overflow-y-auto bg-gray-50 flex justify-center flex-1">
+        <div id="hojaImpresion" class="bg-white p-10 rounded-lg shadow border border-gray-200 w-full max-w-[800px] text-gray-800 font-sans">
+          <div class="flex justify-between items-start border-b-2 border-blue-900 pb-6 mb-6">
+            <div>
+              <h1 class="text-xl font-extrabold text-blue-900">DISTRIBUCIONES CONGELADOS S.L.</h1>
+              <p class="text-xs text-gray-500 mt-1">Venta y Distribución de Pescados y Mariscos Congelados</p>
+            </div>
+            <div class="text-right">
+              <div class="bg-blue-50 px-4 py-2 rounded-lg inline-block border border-blue-100">
+                <span class="text-[10px] font-bold text-blue-700 uppercase tracking-wider">ALBARÁN DE ENTREGA</span>
+                <h2 id="vNumAlbaran" class="text-base font-bold text-blue-900 mt-0.5">ALB-2026-000</h2>
+              </div>
+              <p id="vFecha" class="text-xs font-bold text-gray-700 mt-2">Fecha: --/--/----</p>
+            </div>
+          </div>
+          <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 flex justify-between">
+            <div>
+              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">CLIENTE / DESTINATARIO</span>
+              <h3 id="vCliente" class="text-base font-bold text-gray-900">-</h3>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">REPARTIDOR / RUTA</span>
+              <h3 id="vRepartidor" class="text-sm font-bold text-blue-900">-</h3>
+            </div>
+          </div>
+          <table class="w-full text-xs text-left text-gray-700 mb-8 border-collapse">
+            <thead>
+              <tr class="bg-gray-100 border-b-2 border-gray-300 text-gray-800">
+                <th class="p-2.5">Producto</th>
+                <th class="p-2.5">Lote</th>
+                <th class="p-2.5 text-center">Cajas</th>
+                <th class="p-2.5 text-center">Kilos</th>
+                <th class="p-2.5 text-right">Precio (€/kg)</th>
+                <th class="p-2.5 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="vTablaBody"></tbody>
+          </table>
+          
+          <div id="vFotoContainer" class="hidden mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <p class="text-xs font-bold text-amber-800 mb-2">📸 Evidencia Fotográfica de Incidencia:</p>
+            <img id="vFotoIncidenciaImg" src="" alt="Foto Incidencia" class="max-h-48 rounded-lg border border-amber-300 shadow-sm">
+          </div>
+
+          <div class="flex justify-between items-end border-t-2 border-gray-200 pt-6">
+            <div class="w-1/2 border border-gray-300 rounded-lg p-2 bg-white text-center">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] font-bold text-gray-500 uppercase">Firma del Cliente (Rúbrica)</span>
+                <button type="button" onclick="limpiarFirma()" class="text-[10px] text-red-600 hover:underline font-bold">🗑️ Borrar</button>
+              </div>
+              <canvas id="canvasFirma" class="w-full h-24 border border-dashed border-gray-300 rounded cursor-crosshair bg-gray-50 touch-none"></canvas>
+            </div>
+
+            <div class="w-5/12 bg-gray-50 border border-gray-200 rounded-lg p-4 text-right space-y-1">
+              <p class="text-xs text-gray-600">Total Cajas: <strong id="vTotalCajas" class="text-gray-900">0</strong></p>
+              <p class="text-xs text-gray-600">Total Kilos: <strong id="vTotalKilos" class="text-gray-900">0.00 kg</strong></p>
+              <p class="text-base font-bold text-blue-900 border-t border-gray-200 pt-2 mt-2">Total Albarán: <span id="vTotalImporte">0.00 €</span></p>
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4 border-t flex justify-end print:hidden">
+            <button onclick="guardarFirmaYEntregar()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-6 py-2.5 rounded-xl text-sm shadow transition flex items-center gap-2">
+              ✍️ Guardar Firma y Marcar Entregado
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE MODIFICACIÓN EN RUTA [*] -->
+  <div id="modalRuta" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div class="bg-blue-900 text-white p-4 flex justify-between items-center">
+        <h3 class="font-bold text-base">✏️ Modificar Albarán en Ruta (In Situ) [*]</h3>
+        <button onclick="cerrarModalRuta()" class="text-gray-200 hover:text-white font-bold text-xl px-2">✕</button>
+      </div>
+      <div class="p-6 space-y-4 overflow-y-auto flex-1">
+        <input type="hidden" id="editAlbaranId">
+        
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase block">Albarán</span>
+            <h4 id="editNumAlbaran" class="font-bold text-blue-900 text-base">-</h4>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase block">Cliente</span>
+            <h4 id="editClienteNombre" class="font-bold text-slate-800 text-sm">-</h4>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-bold text-slate-500 uppercase mb-2">Líneas del Pedido (Edita cajas, kilos o precios)</h4>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-xs text-left text-slate-700">
+              <thead class="bg-slate-100 text-slate-800 border-b">
+                <tr>
+                  <th class="p-2.5">Producto</th>
+                  <th class="p-2.5 text-center">Cajas Entregadas</th>
+                  <th class="p-2.5 text-center">Kilos Reales</th>
+                  <th class="p-2.5 text-right">Precio (€/kg)</th>
+                </tr>
+              </thead>
+              <tbody id="editLineasBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-amber-700 uppercase mb-1">⚠️ Motivo Obligatorio de la Incidencia / Modificación [*]</label>
+          <input type="text" id="motivoIncidenciaInput" placeholder="Ej: Cliente devuelve 1 caja / Ajuste de peso en báscula" class="w-full bg-amber-50/50 border border-amber-300 rounded-xl p-2.5 text-xs font-semibold">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">📸 Fotografía de Incidencia (Opcional)</label>
+          <input type="file" id="fotoIncidenciaInput" accept="image/*" capture="environment" onchange="previsualizarFotoIncidencia(event)" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+          
+          <div id="previewFotoBox" class="hidden mt-3">
+            <img id="previewFotoImg" src="" alt="Vista previa" class="h-32 rounded-xl border border-slate-300 object-cover shadow-sm">
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t flex justify-end gap-3">
+        <button onclick="cerrarModalRuta()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition">Cancelar</button>
+        <button onclick="guardarCambiosRuta()" class="px-5 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow transition">💾 Guardar Cambios [*] y Ajustar Stock</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT SUPABASE -->
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let albaranesCache = [];
+    let clientesMap = {};
+    let productosMap = {};
+    let repartidoresLista = [];
+    let lineasAlbaranCache = [];
+    let lineasEditandoActuales = [];
+    let albaranActualIdVisor = null;
+    let fotoBase64Comprimida = null;
+
+    let canvas, ctx, dibujando = false;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById('filtroFecha').value = new Date().toISOString().split('T')[0];
+      await cargarCatalogosAuxiliares();
+      cargarAlbaranesRuta();
+      inicializarCanvasFirma();
+    });
+
+    function inicializarCanvasFirma() {
+      canvas = document.getElementById('canvasFirma');
+      if (!canvas) return;
+      ctx = canvas.getContext('2d');
+
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+
+      canvas.onmousedown = (e) => { dibujando = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); };
+      canvas.onmousemove = (e) => { if (dibujando) { ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); } };
+      canvas.onmouseup = () => { dibujando = false; };
+      canvas.onmouseleave = () => { dibujando = false; };
+
+      canvas.ontouchstart = (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        dibujando = true;
+        ctx.beginPath();
+        ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+      };
+      canvas.ontouchmove = (e) => {
+        e.preventDefault();
+        if (!dibujando) return;
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+        ctx.stroke();
+      };
+      canvas.ontouchend = () => { dibujando = false; };
+    }
+
+    function limpiarFirma() {
+      if (ctx && canvas) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    function previsualizarFotoIncidencia(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          const MAX_WIDTH = 800;
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          fotoBase64Comprimida = canvas.toDataURL('image/jpeg', 0.6);
+
+          document.getElementById('previewFotoImg').src = fotoBase64Comprimida;
+          document.getElementById('previewFotoBox').classList.remove('hidden');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function cargarCatalogosAuxiliares() {
+      const { data: cli } = await db.from('clientes').select('*');
+      if (cli) cli.forEach(c => clientesMap[c.id] = c.nombre_comercial || c.nombre || c.razon_social || `Cliente #${c.id}`);
+
+      const { data: prod } = await db.from('productos').select('*');
+      if (prod) prod.forEach(p => productosMap[p.id] = p.nombre || p.nombre_producto || `Producto #${p.id}`);
+
+      const { data: reps } = await db.from('repartidores').select('*');
+      const selectRep = document.getElementById('filtroRepartidor');
+      repartidoresLista = reps || [];
+
+      if (reps) {
+        reps.forEach(r => {
+          const nombreRep = r.nombre || r.nombre_repartidor || `Repartidor #${r.id}`;
+          const opt = document.createElement('option');
+          opt.value = nombreRep;
+          opt.innerText = '🛵 ' + nombreRep;
+          selectRep.appendChild(opt);
+        });
+      }
+    }
+
+    async function cargarAlbaranesRuta() {
+      const fechaSel = document.getElementById('filtroFecha').value;
+      const repSel = document.getElementById('filtroRepartidor').value;
+
+      const { data: albaranes } = await db.from('albaranes').select('*');
+      const { data: lineas } = await db.from('lineas_albaran').select('*');
+      lineasAlbaranCache = lineas || [];
+
+      if (!albaranes) return;
+
+      albaranesCache = albaranes.map(a => {
+        const fechaAlb = (a.fecha_salida || a.fecha || a.created_at || '').split('T')[0];
+        const misLineas = lineasAlbaranCache.filter(l => String(l.albaran_id || l.id_albaran) === String(a.id));
+        
+        let cj = Number(a.total_cajas) || misLineas.reduce((acc, l) => acc + (Number(l.cajas) || 0), 0);
+        let kg = Number(a.total_kilos) || misLineas.reduce((acc, l) => acc + (Number(l.kilos) || 0), 0);
+        let imp = Number(a.total_importe || a.total) || misLineas.reduce((acc, l) => acc + Number(l.subtotal || (l.kilos * l.precio_kg) || 0), 0);
+
+        return {
+          ...a,
+          fechaStr: fechaAlb,
+          nombreCliente: clientesMap[a.cliente_id] || 'Cliente Desconocido',
+          repartidorVal: a.repartidor || 'Sin Asignar',
+          cajas: cj,
+          kilos: kg,
+          importe: imp,
+          lineas: misLineas
+        };
+      });
+
+      let filtrados = albaranesCache.filter(a => a.fechaStr === fechaSel);
+      if (repSel !== 'TODOS') {
+        filtrados = filtrados.filter(a => a.repartidorVal === repSel);
+      }
+
+      renderizarTablaRuta(filtrados);
+    }
+
+    function renderizarTablaRuta(lista) {
+      const tbody = document.getElementById('tablaRutaBody');
+      tbody.innerHTML = '';
+
+      if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-400">No hay albaranes asignados para esta fecha.</td></tr>';
+        return;
+      }
+
+      lista.forEach(a => {
+        const isEntregado = a.estado === 'entregado';
+        const modificado = a.modificado_en_ruta;
+        
+        let estadoBadge = 'bg-blue-100 text-blue-800';
+        if (isEntregado) estadoBadge = 'bg-emerald-100 text-emerald-800';
+        if (modificado) estadoBadge = 'bg-amber-100 text-amber-800';
+        
+        const estadoTxt = modificado ? 'Modificado [*]' : (a.estado || 'pendiente');
+
+        let optionsRepartidores = `<option value="Sin Asignar">-- Sin Asignar --</option>`;
+        repartidoresLista.forEach(r => {
+          const nom = r.nombre || r.nombre_repartidor || `Repartidor #${r.id}`;
+          const selected = (a.repartidorVal === nom) ? 'selected' : '';
+          optionsRepartidores += `<option value="${nom}" ${selected}>${nom}</option>`;
+        });
+
+        const botonEntregadoHtml = isEntregado 
+          ? `<button onclick="toggleEntregado('${a.id}', false)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow-sm">✅ Entregado</button>`
+          : `<button onclick="toggleEntregado('${a.id}', true)" class="px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 font-bold rounded-xl text-xs transition border border-slate-300">⏳ Pendiente</button>`;
+
+        tbody.innerHTML += `
+          <tr class="border-b bg-white hover:bg-slate-50 ${modificado ? 'bg-amber-50/40' : ''} transition">
+            <td class="py-3 px-4 font-mono font-bold text-blue-900">
+              <button onclick="verAlbaranModal('${a.id}')" class="hover:underline text-blue-900 flex items-center gap-1">
+                📄 ${a.numero_albaran || 'ALB-000'} ${modificado ? '<span class="text-amber-600 font-bold">[*]</span>' : ''}
+              </button>
+            </td>
+            <td class="py-3 px-4 font-bold text-slate-800">${a.nombreCliente}</td>
+            <td class="py-3 px-4">
+              <select onchange="cambiarRepartidorAlbaran('${a.id}', this.value)" class="bg-slate-50 border border-slate-300 rounded-lg p-1.5 text-xs font-semibold text-blue-900">
+                ${optionsRepartidores}
+              </select>
+            </td>
+            <td class="py-3 px-4 text-center font-semibold text-xs">${a.cajas} caj. / ${a.kilos.toFixed(2)} kg</td>
+            <td class="py-3 px-4 text-right font-bold text-emerald-700">${a.importe.toFixed(2)} €</td>
+            <td class="py-3 px-4 text-center">
+              <span class="${estadoBadge} text-[10px] font-bold px-2 py-0.5 rounded-full uppercase" title="${a.motivo_modificacion || ''}">${estadoTxt}</span>
+            </td>
+            <td class="py-3 px-4 text-center space-x-2">
+              <button onclick="abrirModalRuta('${a.id}')" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-xs transition border border-blue-200">
+                ✏️ Modificar [*]
+              </button>
+              ${botonEntregadoHtml}
+            </td>
+          </tr>`;
+      });
+    }
+
+    async function cambiarRepartidorAlbaran(albaranId, nuevoRepartidor) {
+      const { error } = await db.from('albaranes').update({ repartidor: nuevoRepartidor }).eq('id', albaranId);
+      if (error) {
+        alert("⚠️ Error al asignar repartidor: " + error.message);
+      } else {
+        const alb = albaranesCache.find(a => String(a.id) === String(albaranId));
+        if (alb) alb.repartidorVal = nuevoRepartidor;
+      }
+    }
+
+    async function toggleEntregado(albaranId, marcarComoEntregado) {
+      const nuevoEstado = marcarComoEntregado ? 'entregado' : 'pendiente';
+      const { error } = await db.from('albaranes').update({ estado: nuevoEstado }).eq('id', albaranId);
+      if (error) {
+        alert("⚠️ Error al actualizar el estado: " + error.message);
+      } else {
+        cargarAlbaranesRuta();
+      }
+    }
+
+    function verAlbaranModal(albaranId) {
+      albaranActualIdVisor = albaranId;
+      const alb = albaranesCache.find(a => String(a.id) === String(albaranId));
+      if (!alb) return;
+
+      document.getElementById('vNumAlbaran').innerText = (alb.numero_albaran || 'ALB-000') + (alb.modificado_en_ruta ? ' [*]' : '');
+      document.getElementById('vFecha').innerText = 'Fecha: ' + alb.fechaStr;
+      document.getElementById('vCliente').innerText = alb.nombreCliente;
+      document.getElementById('vRepartidor').innerText = alb.repartidorVal;
+      document.getElementById('vTotalCajas').innerText = alb.cajas;
+      document.getElementById('vTotalKilos').innerText = alb.kilos.toFixed(2) + ' kg';
+      document.getElementById('vTotalImporte').innerText = alb.importe.toFixed(2) + ' €';
+
+      const fotoContainer = document.getElementById('vFotoContainer');
+      const fotoImg = document.getElementById('vFotoIncidenciaImg');
+      if (alb.foto_incidencia) {
+        fotoImg.src = alb.foto_incidencia;
+        fotoContainer.classList.remove('hidden');
+      } else {
+        fotoContainer.classList.add('hidden');
+      }
+
+      const tbody = document.getElementById('vTablaBody');
+      tbody.innerHTML = '';
+      let lineas = alb.lineas || [];
+
+      if (lineas.length > 0) {
+        lineas.forEach(l => {
+          const nombreProd = productosMap[l.producto_id] || l.nombre_producto || `Producto #${l.producto_id}`;
+          const cajas = Number(l.cajas) || 0;
+          const kilos = Number(l.kilos) || 0;
+          
+          let precio = Number(l.precio_kg || l.precio) || 0;
+          let subtotal = Number(l.subtotal || l.importe) || 0;
+
+          if (precio === 0 && kilos > 0 && subtotal > 0) precio = subtotal / kilos;
+          if (subtotal === 0 && kilos > 0 && precio > 0) subtotal = kilos * precio;
+
+          tbody.innerHTML += `
+            <tr class="border-b border-gray-100">
+              <td class="p-2.5 font-bold">${nombreProd}</td>
+              <td class="p-2.5 font-mono text-gray-500">${l.lote || 'LOT-GENERAL'}</td>
+              <td class="p-2.5 text-center">${cajas}</td>
+              <td class="p-2.5 text-center">${kilos.toFixed(2)} kg</td>
+              <td class="p-2.5 text-right">${precio.toFixed(2)} €</td>
+              <td class="p-2.5 text-right font-bold">${subtotal.toFixed(2)} €</td>
+            </tr>`;
+        });
+      } else {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-gray-400">Sin detalle de productos.</td></tr>`;
+      }
+
+      limpiarFirma();
+      document.getElementById('modalVisor').classList.remove('hidden');
+      setTimeout(inicializarCanvasFirma, 200);
+    }
+
+    async function guardarFirmaYEntregar() {
+      if (!albaranActualIdVisor) return;
+
+      const firmaDataUrl = canvas.toDataURL('image/png');
+
+      const { error } = await db.from('albaranes').update({ 
+        estado: 'entregado',
+        firma_cliente: firmaDataUrl 
+      }).eq('id', albaranActualIdVisor);
+
+      if (error) {
+        alert("⚠️ Error al registrar firma: " + error.message);
+      } else {
+        alert("✅ ¡Entrega firmada y registrada con éxito!");
+        cerrarVisor();
+        cargarAlbaranesRuta();
+      }
+    }
+
+    function cerrarVisor() { document.getElementById('modalVisor').classList.add('hidden'); }
+
+    function abrirModalRuta(albaranId) {
+      const alb = albaranesCache.find(a => String(a.id) === String(albaranId));
+      if (!alb) return;
+
+      document.getElementById('editAlbaranId').value = alb.id;
+      document.getElementById('editNumAlbaran').innerText = alb.numero_albaran || 'ALB-000';
+      document.getElementById('editClienteNombre').innerText = alb.nombreCliente;
+      document.getElementById('motivoIncidenciaInput').value = alb.motivo_modificacion || '';
+      
+      fotoBase64Comprimida = alb.foto_incidencia || null;
+      if (fotoBase64Comprimida) {
+        document.getElementById('previewFotoImg').src = fotoBase64Comprimida;
+        document.getElementById('previewFotoBox').classList.remove('hidden');
+      } else {
+        document.getElementById('previewFotoBox').classList.add('hidden');
+      }
+
+      lineasEditandoActuales = JSON.parse(JSON.stringify(alb.lineas)); 
+      renderizarLineasEdicion();
+
+      document.getElementById('modalRuta').classList.remove('hidden');
+    }
+
+    function cerrarModalRuta() { document.getElementById('modalRuta').classList.add('hidden'); }
+
+    function renderizarLineasEdicion() {
+      const tbody = document.getElementById('editLineasBody');
+      tbody.innerHTML = '';
+
+      lineasEditandoActuales.forEach((l, idx) => {
+        const nombreProd = productosMap[l.producto_id] || l.nombre_producto || 'Producto';
+        tbody.innerHTML += `
+          <tr class="border-b bg-white">
+            <td class="p-2.5 font-bold text-slate-800">${nombreProd}</td>
+            <td class="p-2.5 text-center">
+              <input type="number" min="0" value="${l.cajas}" onchange="lineasEditandoActuales[${idx}].cajas = Number(this.value)" class="w-20 bg-slate-50 border border-slate-300 rounded-lg p-1 text-center font-bold">
+            </td>
+            <td class="p-2.5 text-center">
+              <input type="number" step="0.01" min="0" value="${l.kilos}" onchange="lineasEditandoActuales[${idx}].kilos = Number(this.value)" class="w-24 bg-slate-50 border border-slate-300 rounded-lg p-1 text-center font-bold">
+            </td>
+            <td class="p-2.5 text-right">
+              <input type="number" step="0.01" min="0" value="${l.precio_kg || l.precio || 0}" onchange="lineasEditandoActuales[${idx}].precio_kg = Number(this.value)" class="w-24 bg-slate-50 border border-slate-300 rounded-lg p-1 text-right font-bold">
+            </td>
+          </tr>`;
+      });
+    }
+
+    async function guardarCambiosRuta() {
+      const albaranId = document.getElementById('editAlbaranId').value;
+      const albOriginal = albaranesCache.find(a => String(a.id) === String(albaranId));
+      if (!albOriginal) return;
+
+      const motivo = document.getElementById('motivoIncidenciaInput').value.trim();
+      if (!motivo) {
+        alert("⚠️ Es obligatorio introducir el motivo de la modificación [*].");
+        document.getElementById('motivoIncidenciaInput').focus();
+        return;
+      }
+
+      let nuevoTotalCajas = 0;
+      let nuevoTotalKilos = 0;
+      let nuevoTotalImporte = 0;
+
+      for (let i = 0; i < lineasEditandoActuales.length; i++) {
+        const lMod = lineasEditandoActuales[i];
+        const lOrig = albOriginal.lineas[i];
+
+        const subtotal = lMod.kilos * (lMod.precio_kg || lMod.precio || 0);
+        nuevoTotalCajas += lMod.cajas;
+        nuevoTotalKilos += lMod.kilos;
+        nuevoTotalImporte += subtotal;
+
+        await db.from('lineas_albaran').update({
+          cajas: lMod.cajas,
+          kilos: lMod.kilos,
+          precio_kg: lMod.precio_kg || lMod.precio,
+          subtotal: subtotal
+        }).eq('id', lMod.id);
+
+        const diffKilos = (Number(lOrig.kilos) || 0) - (Number(lMod.kilos) || 0);
+        const diffCajas = (Number(lOrig.cajas) || 0) - (Number(lMod.cajas) || 0);
+
+        if (diffKilos > 0 || diffCajas > 0) {
+          const { data: prodData } = await db.from('productos').select('*').eq('id', lMod.producto_id).single();
+          if (prodData) {
+            const stockC = Number(prodData.cajas_stock || prodData.stock_cajas || 0);
+            const stockK = Number(prodData.kilos_stock || prodData.stock_kilos || 0);
+            await db.from('productos').update({
+              cajas_stock: stockC + Math.abs(diffCajas),
+              kilos_stock: stockK + Math.abs(diffKilos),
+              stock_cajas: stockC + Math.abs(diffCajas),
+              stock_kilos: stockK + Math.abs(diffKilos)
+            }).eq('id', lMod.producto_id);
+          }
+        }
+      }
+
+      await db.from('albaranes').update({
+        total_cajas: nuevoTotalCajas,
+        total_kilos: nuevoTotalKilos,
+        total_importe: nuevoTotalImporte,
+        modificado_en_ruta: true,
+        motivo_modificacion: motivo,
+        foto_incidencia: fotoBase64Comprimida,
+        estado: 'modificado'
+      }).eq('id', albaranId);
+
+      alert("✅ ¡Modificación en ruta guardada con éxito [*]!");
+      cerrarModalRuta();
+      cargarAlbaranesRuta();
+    }
+  </script>
+</body>
+</html>

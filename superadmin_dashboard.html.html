@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel SuperAdmin - ERP SaaS</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #0f172a; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100 pb-12">
+
+  <!-- NAVBAR SUPERADMIN -->
+  <nav class="bg-slate-900 border-b border-slate-800 shadow-xl mb-6 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex justify-between h-16 items-center">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">⚡</span>
+          <div>
+            <span class="font-black text-base tracking-wider text-amber-400">PANEL SUPERADMIN</span>
+            <span class="block text-[10px] text-slate-400 font-mono">Control Maestro de Licencias SaaS</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="btnLogout" title="Cerrar Sesión" class="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold transition">
+            <i class="fa-solid fa-power-off mr-1"></i> Salir
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="max-w-7xl mx-auto space-y-6 px-4">
+
+    <!-- METRICAS SAAS -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-lg">
+        <span class="text-xs font-bold text-slate-400 uppercase block">Empresas Registradas</span>
+        <h2 id="kpiEmpresasTotal" class="text-3xl font-black text-amber-400 mt-1">0</h2>
+      </div>
+
+      <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-lg">
+        <span class="text-xs font-bold text-slate-400 uppercase block">Licencias Activas</span>
+        <h2 id="kpiLicenciasActivas" class="text-3xl font-black text-emerald-400 mt-1">0</h2>
+      </div>
+
+      <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-lg">
+        <span class="text-xs font-bold text-slate-400 uppercase block">Bloqueadas / Impago</span>
+        <h2 id="kpiEmpresasBloqueadas" class="text-3xl font-black text-rose-400 mt-1">0</h2>
+      </div>
+
+      <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-lg">
+        <span class="text-xs font-bold text-slate-400 uppercase block">Modo Inspección</span>
+        <h2 id="kpiModoDiosStatus" class="text-xs font-bold text-blue-400 mt-2 bg-blue-500/10 p-2 rounded-xl border border-blue-500/20">Desactivado</h2>
+      </div>
+    </div>
+
+    <!-- TABLA MAESTRA -->
+    <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-building text-amber-400"></i> Directorio de Empresas y Licencias SaaS
+        </h2>
+        <button onclick="abrirModalEmpresa()" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs transition shadow-lg">
+          <i class="fa-solid fa-plus mr-1"></i> Nueva Empresa
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-800/50 text-xs text-slate-400 uppercase border-b border-slate-800">
+            <tr>
+              <th class="p-3">Empresa</th>
+              <th class="p-3">CIF / NIF</th>
+              <th class="p-3">Plan SaaS</th>
+              <th class="p-3 text-center">Estado Licencia</th>
+              <th class="p-3 text-center">Acceso "Modo Dios"</th>
+              <th class="p-3 text-center">Gestión</th>
+            </tr>
+          </thead>
+          <tbody id="tablaSaasBody" class="divide-y divide-slate-800">
+            <tr><td colspan="6" class="p-6 text-center text-slate-500">Cargando directorio SaaS...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL EMPRESA -->
+  <div id="modalEmpresa" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 text-slate-100 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="font-extrabold text-amber-400 text-base">Registrar Nueva Empresa / Licencia</h3>
+        <button onclick="cerrarModalEmpresa()" class="text-slate-400 hover:text-white font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">Nombre Comercial *</label>
+          <input type="text" id="sNombre" placeholder="Pescados del Sur S.L." class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-semibold">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">CIF / NIF *</label>
+          <input type="text" id="sCif" placeholder="B-12345678" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-semibold">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-400 uppercase mb-1">Plan Contratado</label>
+          <select id="sPlan" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-bold">
+            <option value="STANDARD">Standard (PWA + Albaranes + Stock)</option>
+            <option value="PRO">PRO (Facturación + Veri*Factu + Lotes)</option>
+            <option value="ENTERPRISE">Enterprise (Multi-tenancy + Sin Límites)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 border-t border-slate-800 pt-3">
+        <button onclick="cerrarModalEmpresa()" class="px-4 py-2 bg-slate-800 text-slate-300 font-bold rounded-xl hover:bg-slate-700">Cancelar</button>
+        <button onclick="guardarNuevaEmpresaSaas()" class="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow">Alta Empresa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT SUPABASE -->
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    window.onload = () => { cargarDirectorioSaas(); };
+
+    async function cargarDirectorioSaas() {
+      const { data: empresas, error } = await dbClient.from('empresas').select('*').order('created_at', { ascending: false });
+      const tbody = document.getElementById('tablaSaasBody');
+
+      if (error) {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-rose-400">Error al consultar datos globales.</td></tr>';
+        return;
+      }
+
+      if (!empresas || empresas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-500">No hay empresas registradas.</td></tr>';
+        return;
+      }
+
+      document.getElementById('kpiEmpresasTotal').innerText = empresas.length;
+      document.getElementById('kpiLicenciasActivas').innerText = empresas.filter(e => e.activo !== false).length;
+      document.getElementById('kpiEmpresasBloqueadas').innerText = empresas.filter(e => e.activo === false).length;
+
+      tbody.innerHTML = empresas.map(e => {
+        const isActiva = e.activo !== false;
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="p-3 font-bold text-white">${e.nombre_comercial || e.nombre || 'Empresa'}</td>
+            <td class="p-3 font-mono text-slate-400">${e.cif_nif || e.cif || '-'}</td>
+            <td class="p-3"><span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">${e.plan || 'PRO'}</span></td>
+            <td class="p-3 text-center">
+              <span class="${isActiva ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'} text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                ${isActiva ? 'Activa' : 'Bloqueada'}
+              </span>
+            </td>
+            <td class="p-3 text-center">
+              <button onclick="activarModoDios('${e.id}', '${e.nombre_comercial || e.nombre}')" class="px-2.5 py-1 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold transition">
+                👁️ Inspeccionar
+              </button>
+            </td>
+            <td class="p-3 text-center">
+              <button onclick="toggleEstadoEmpresa('${e.id}', ${isActiva})" class="text-xs font-bold ${isActiva ? 'text-rose-400 hover:underline' : 'text-emerald-400 hover:underline'}">
+                ${isActiva ? '🔒 Bloquear' : '🔓 Desbloquear'}
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function abrirModalEmpresa() { document.getElementById('modalEmpresa').classList.remove('hidden'); }
+    function cerrarModalEmpresa() { document.getElementById('modalEmpresa').classList.add('hidden'); }
+
+    async function guardarNuevaEmpresaSaas() {
+      const nombre = document.getElementById('sNombre').value.trim();
+      const cif = document.getElementById('sCif').value.trim();
+      const plan = document.getElementById('sPlan').value;
+
+      if (!nombre || !cif) return alert("Por favor, completa nombre y CIF.");
+
+      const { error } = await dbClient.from('empresas').insert([{
+        nombre_comercial: nombre,
+        cif_nif: cif,
+        plan: plan,
+        activo: true
+      }]);
+
+      if (error) alert("Error al registrar empresa: " + error.message);
+      else {
+        alert("✅ Empresa dada de alta con éxito.");
+        cerrarModalEmpresa();
+        cargarDirectorioSaas();
+      }
+    }
+
+    async function toggleEstadoEmpresa(id, estadoActual) {
+      const { error } = await dbClient.from('empresas').update({ activo: !estadoActual }).eq('id', id);
+      if (error) alert("Error al cambiar estado: " + error.message);
+      else cargarDirectorioSaas();
+    }
+
+    function activarModoDios(empresaId, nombreEmpresa) {
+      localStorage.setItem('MODO_DIOS_EMPRESA_ID', empresaId);
+      document.getElementById('kpiModoDiosStatus').innerText = "👁️ Modo Dios: " + nombreEmpresa;
+      alert("👁️ Inspeccionando en 'Modo Dios' la empresa: " + nombreEmpresa);
+    }
+  </script>
+</body>
+</html>

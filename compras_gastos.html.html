@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compras y Gastos Operativos - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
+
+  <!-- NAVBAR UNIFICADO -->
+  <nav class="bg-gray-900 text-white shadow-lg mb-6 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex justify-between h-16 items-center">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">❄️</span>
+          <div>
+            <a href="index.html" class="font-extrabold text-base tracking-wide text-white hover:text-blue-400 transition">ERP CONGELADOS</a>
+            <span class="block text-[10px] text-gray-400 font-normal -mt-1">Sistema ERP Integral & Trazabilidad</span>
+          </div>
+        </div>
+        <div class="hidden xl:flex items-center space-x-1 text-xs font-semibold">
+          <a href="index.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🏠 Inicio</a>
+          <a href="albaranes.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🚚 Albaranes</a>
+          <a href="historico.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📜 Histórico</a>
+          <a href="hoja_carga.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📦 Hoja Carga</a>
+          <a href="rutas.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🗺️ Rutas</a>
+          <a href="repartidor.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🛵 Reparto</a>
+          <a href="facturacion.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">⚖️ Facturación</a>
+          <a href="facturas.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📄 Facturas</a>
+          <a href="almacen.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📦 Almacén</a>
+          <a href="productos.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🏷️ Productos</a>
+          <a href="compras.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">🛒 Compras</a>
+          <a href="compras_gastos.html" class="px-3 py-2 rounded-lg bg-blue-700 text-white font-bold transition flex items-center gap-1">💸 Gastos</a>
+          <a href="clientes.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">👥 Clientes</a>
+          <a href="estadisticas.html" class="px-2.5 py-2 rounded-lg hover:bg-gray-800 hover:text-blue-400 transition flex items-center gap-1">📊 Analítica</a>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="configuracion.html" title="Configuración" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition text-sm">⚙️</a>
+          <button id="btnLogout" title="Cerrar Sesión" class="p-2 rounded-lg bg-rose-900/50 hover:bg-rose-800 text-rose-200 transition text-sm font-bold">🚪</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="max-w-7xl mx-auto space-y-6 px-4">
+
+    <!-- CABECERA Y KPIS -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <div>
+        <h1 class="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-file-invoice-dollar text-blue-600"></i> Registro de Compras y Gastos Operativos
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Control de facturas de proveedores, combustible, mantenimiento y costes de estructura</p>
+      </div>
+
+      <button onclick="abrirModalGasto()" class="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition flex items-center gap-2 text-sm">
+        <i class="fa-solid fa-plus"></i> Registrar Nuevo Gasto
+      </button>
+    </div>
+
+    <!-- TARJETAS DE MÉTRICAS -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-slate-400 uppercase block">Gastos Totales Mes</span>
+          <h2 id="kpiTotalGastos" class="text-2xl font-extrabold text-slate-800 mt-1">0.00 €</h2>
+        </div>
+        <div class="p-3 bg-blue-50 text-blue-600 rounded-xl">
+          <i class="fa-solid fa-calculator text-xl"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-slate-400 uppercase block">Pendiente de Pago</span>
+          <h2 id="kpiPendientePago" class="text-2xl font-extrabold text-amber-600 mt-1">0.00 €</h2>
+        </div>
+        <div class="p-3 bg-amber-50 text-amber-600 rounded-xl">
+          <i class="fa-solid fa-clock text-xl"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-slate-400 uppercase block">Pagado este Mes</span>
+          <h2 id="kpiPagado" class="text-2xl font-extrabold text-emerald-600 mt-1">0.00 €</h2>
+        </div>
+        <div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+          <i class="fa-solid fa-circle-check text-xl"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLA DE REGISTROS -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <div class="flex flex-col sm:flex-row justify-between items-center gap-3 pb-2 border-b">
+        <h3 class="text-base font-bold text-slate-800">📋 Histórico de Facturas de Gastos y Compras</h3>
+        
+        <div class="flex items-center gap-2">
+          <input type="text" id="busquedaInput" onkeyup="filtrarTabla()" placeholder="Buscar por concepto o proveedor..." class="p-2 border border-slate-300 rounded-xl text-xs font-medium w-64 focus:ring-2 focus:ring-blue-500">
+          
+          <select id="filtroCategoria" onchange="cargarGastos()" class="p-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 bg-slate-50">
+            <option value="TODOS">Todas las Categorías</option>
+            <option value="MERCANCIA">📦 Mercancía / Pescado</option>
+            <option value="COMBUSTIBLE">⛽ Combustible / Flota</option>
+            <option value="ELECTRICIDAD">⚡ Electricidad / Cámaras</option>
+            <option value="MANTENIMIENTO">🛠️ Mantenimiento / Reparación</option>
+            <option value="NOMINAS">👥 Nóminas / Personal</option>
+            <option value="VARIOS">📌 Varios / Estructura</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-600">
+          <thead class="bg-slate-100 text-xs text-slate-500 uppercase border-b">
+            <tr>
+              <th class="p-3">Fecha</th>
+              <th class="p-3">Proveedor / Acreedor</th>
+              <th class="p-3">Categoría</th>
+              <th class="p-3">Concepto / Nº Factura</th>
+              <th class="p-3 text-right"> Base Imponible</th>
+              <th class="p-3 text-right">Total (+IVA)</th>
+              <th class="p-3 text-center">Estado</th>
+              <th class="p-3 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaGastosBody" class="divide-y divide-slate-100">
+            <tr><td colspan="8" class="p-6 text-center text-slate-400">Cargando registros...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL NUEVO/EDITAR GASTO -->
+  <div id="modalGasto" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden space-y-4 p-6">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-base font-bold text-slate-800"><i class="fa-solid fa-receipt text-blue-600"></i> Registrar Factura de Gasto / Compra</h3>
+        <button onclick="cerrarModalGasto()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha Factura *</label>
+            <input type="date" id="gastoFecha" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-semibold">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Categoría *</label>
+            <select id="gastoCategoria" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800">
+              <option value="MERCANCIA">📦 Mercancía / Pescado</option>
+              <option value="COMBUSTIBLE">⛽ Combustible / Flota</option>
+              <option value="ELECTRICIDAD">⚡ Electricidad / Cámaras</option>
+              <option value="MANTENIMIENTO">🛠️ Mantenimiento / Reparación</option>
+              <option value="NOMINAS">👥 Nóminas / Personal</option>
+              <option value="VARIOS">📌 Varios / Estructura</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Proveedor / Acreedor *</label>
+          <input type="text" id="gastoProveedor" placeholder="Ej: Repsol S.A. / Pescados Málaga S.L." class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-semibold">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Concepto / Nº Factura Proveedor *</label>
+          <input type="text" id="gastoConcepto" placeholder="Ej: Gasoil Furgoneta MA-1234 / Factura F-2026-88" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-semibold">
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Base (€) *</label>
+            <input type="number" step="0.01" id="gastoBase" onkeyup="calcularTotalGasto()" placeholder="0.00" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">IVA (%)</label>
+            <input type="number" step="1" id="gastoIvaPct" value="21" onkeyup="calcularTotalGasto()" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Total (€)</label>
+            <input type="number" step="0.01" id="gastoTotal" readonly class="w-full p-2.5 bg-slate-100 border border-slate-300 rounded-xl text-xs font-extrabold text-blue-700">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Estado de Pago</label>
+          <select id="gastoEstado" class="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800">
+            <option value="PAGADO">✅ Pagado</option>
+            <option value="PENDIENTE">⏳ Pendiente de Pago</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 border-t pt-3">
+        <button onclick="cerrarModalGasto()" class="px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-300 transition">Cancelar</button>
+        <button onclick="guardarGasto()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition shadow">💾 Guardar Registro</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT SUPABASE -->
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let gastosCache = [];
+
+    window.onload = () => {
+      document.getElementById('gastoFecha').value = new Date().toISOString().split('T')[0];
+      cargarGastos();
+    };
+
+    function calcularTotalGasto() {
+      const base = parseFloat(document.getElementById('gastoBase').value) || 0;
+      const iva = parseFloat(document.getElementById('gastoIvaPct').value) || 0;
+      const total = base + (base * (iva / 100));
+      document.getElementById('gastoTotal').value = total.toFixed(2);
+    }
+
+    async function cargarGastos() {
+      const { data, error } = await dbClient.from('gastos').select('*').order('fecha', { ascending: false });
+
+      const tbody = document.getElementById('tablaGastosBody');
+
+      if (error) {
+        console.error("Error al cargar gastos:", error);
+        tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">Si es la primera vez, crea la tabla "gastos" en Supabase.</td></tr>';
+        return;
+      }
+
+      gastosCache = data || [];
+      const catSel = document.getElementById('filtroCategoria').value;
+
+      let filtrados = gastosCache;
+      if (catSel !== 'TODOS') {
+        filtrados = filtrados.filter(g => g.categoria === catSel);
+      }
+
+      let totalMes = 0, pendiente = 0, pagado = 0;
+      gastosCache.forEach(g => {
+        const imp = Number(g.total) || 0;
+        totalMes += imp;
+        if (g.estado === 'PAGADO') pagado += imp;
+        else pendiente += imp;
+      });
+
+      document.getElementById('kpiTotalGastos').innerText = totalMes.toFixed(2) + ' €';
+      document.getElementById('kpiPendientePago').innerText = pendiente.toFixed(2) + ' €';
+      document.getElementById('kpiPagado').innerText = pagado.toFixed(2) + ' €';
+
+      if (filtrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">No hay gastos registrados en esta categoría.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtrados.map(g => {
+        const isPagado = g.estado === 'PAGADO';
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-medium text-slate-700">${g.fecha || '-'}</td>
+            <td class="p-3 font-bold text-slate-900">${g.proveedor || '-'}</td>
+            <td class="p-3"><span class="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">${g.categoria}</span></td>
+            <td class="p-3 font-medium text-slate-800">${g.concepto}</td>
+            <td class="p-3 text-right font-mono">${Number(g.base_imponible || 0).toFixed(2)} €</td>
+            <td class="p-3 text-right font-bold text-blue-900">${Number(g.total || 0).toFixed(2)} €</td>
+            <td class="p-3 text-center">
+              <span class="${isPagado ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                ${g.estado}
+              </span>
+            </td>
+            <td class="p-3 text-center">
+              <button onclick="eliminarGasto('${g.id}')" class="text-rose-500 hover:text-rose-700 font-bold text-xs p-1"><i class="fa-solid fa-trash"></i></button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function abrirModalGasto() {
+      document.getElementById('modalGasto').classList.remove('hidden');
+    }
+
+    function cerrarModalGasto() {
+      document.getElementById('modalGasto').classList.add('hidden');
+    }
+
+    async function guardarGasto() {
+      const fecha = document.getElementById('gastoFecha').value;
+      const categoria = document.getElementById('gastoCategoria').value;
+      const proveedor = document.getElementById('gastoProveedor').value.trim();
+      const concepto = document.getElementById('gastoConcepto').value.trim();
+      const base = parseFloat(document.getElementById('gastoBase').value) || 0;
+      const iva = parseFloat(document.getElementById('gastoIvaPct').value) || 0;
+      const total = parseFloat(document.getElementById('gastoTotal').value) || 0;
+      const estado = document.getElementById('gastoEstado').value;
+
+      if (!proveedor || !concepto || base <= 0) {
+        return alert("Por favor, rellena el proveedor, el concepto y un importe base válido.");
+      }
+
+      const payload = {
+        fecha: fecha,
+        categoria: categoria,
+        proveedor: proveedor,
+        concepto: concepto,
+        base_imponible: base,
+        iva_porcentaje: iva,
+        total: total,
+        estado: estado
+      };
+
+      const { error } = await dbClient.from('gastos').insert([payload]);
+
+      if (error) {
+        alert("Error al guardar gasto: " + error.message);
+      } else {
+        alert("✅ Gasto registrado correctamente.");
+        cerrarModalGasto();
+        cargarGastos();
+      }
+    }
+
+    async function eliminarGasto(id) {
+      if (!confirm("¿Seguro que deseas eliminar este registro de gasto?")) return;
+      const { error } = await dbClient.from('gastos').delete().eq('id', id);
+      if (error) alert("Error al eliminar: " + error.message);
+      else cargarGastos();
+    }
+
+    function filtrarTabla() {
+      const q = document.getElementById('busquedaInput').value.toLowerCase();
+      const filas = document.querySelectorAll('#tablaGastosBody tr');
+      filas.forEach(f => {
+        const txt = f.innerText.toLowerCase();
+        f.style.display = txt.includes(q) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>
