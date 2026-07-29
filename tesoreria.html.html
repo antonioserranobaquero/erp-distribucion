@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tesorería y Flujo de Caja - ERP Distribución</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
+
+  <div class="max-w-7xl mx-auto space-y-6 px-4 pt-4">
+
+    <!-- CABECERA -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <h1 class="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
+        <i class="fa-solid fa-piggy-bank text-blue-600"></i> Balance de Tesorería y Beneficio Neto
+      </h1>
+      <p class="text-xs text-slate-500 mt-1">Análisis cruzado de ingresos por ventas vs. gastos operativos y compras</p>
+    </div>
+
+    <!-- TARJETAS DE MÉTRICAS -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-bold text-slate-400 uppercase block">Ingresos Totales (Ventas)</span>
+        <h2 id="kpiIngresos" class="text-2xl font-extrabold text-emerald-600 mt-1">0.00 €</h2>
+        <span class="text-[10px] text-slate-400">Total albaranes y facturas</span>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-bold text-slate-400 uppercase block">Gastos y Compras</span>
+        <h2 id="kpiGastos" class="text-2xl font-extrabold text-rose-600 mt-1">0.00 €</h2>
+        <span class="text-[10px] text-slate-400">Proveedores, combustible, etc.</span>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-bold text-slate-400 uppercase block">Beneficio Neto Estimado</span>
+        <h2 id="kpiBeneficio" class="text-2xl font-extrabold text-blue-900 mt-1">0.00 €</h2>
+        <span class="text-[10px] text-slate-400">Ingresos - Gastos</span>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-bold text-slate-400 uppercase block">Cobros Pendientes Clientes</span>
+        <h2 id="kpiCobrosPendientes" class="text-2xl font-extrabold text-amber-600 mt-1">0.00 €</h2>
+        <span class="text-[10px] text-slate-400">Pendiente de cobro en calle</span>
+      </div>
+    </div>
+
+    <!-- BALANCE Y COMPARATIVA -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      
+      <!-- INGRESOS RECIENTES -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
+          <i class="fa-solid fa-arrow-trend-up text-emerald-600"></i> Últimas Ventas / Cobros
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left text-slate-600">
+            <thead class="bg-slate-50 text-slate-500 uppercase border-b">
+              <tr>
+                <th class="p-2">Documento</th>
+                <th class="p-2">Fecha</th>
+                <th class="p-2 text-right">Importe</th>
+              </tr>
+            </thead>
+            <tbody id="tablaVentasTesoreria" class="divide-y divide-slate-100">
+              <tr><td colspan="3" class="p-4 text-center text-slate-400">Cargando ingresos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- GASTOS RECIENTES -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
+          <i class="fa-solid fa-arrow-trend-down text-rose-600"></i> Últimos Gastos / Salidas
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left text-slate-600">
+            <thead class="bg-slate-50 text-slate-500 uppercase border-b">
+              <tr>
+                <th class="p-2">Proveedor / Concepto</th>
+                <th class="p-2">Fecha</th>
+                <th class="p-2 text-right">Importe</th>
+              </tr>
+            </thead>
+            <tbody id="tablaGastosTesoreria" class="divide-y divide-slate-100">
+              <tr><td colspan="3" class="p-4 text-center text-slate-400">Cargando salidas...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    window.onload = async () => {
+      await calcularTesoreriaGlobal();
+    };
+
+    async function calcularTesoreriaGlobal() {
+      const empresaId = getEmpresaIdActivo();
+
+      let qAlb = dbClient.from('albaranes').select('*');
+      if (empresaId) qAlb = qAlb.eq('empresa_id', empresaId);
+      const { data: albaranes } = await qAlb.order('created_at', { ascending: false });
+
+      let qGastos = dbClient.from('gastos').select('*');
+      if (empresaId) qGastos = qGastos.eq('empresa_id', empresaId);
+      const { data: gastos } = await qGastos.order('fecha', { ascending: false });
+
+      let totalIngresos = 0;
+      let cobrosPendientes = 0;
+      let totalGastos = 0;
+
+      const tbodyVentas = document.getElementById('tablaVentasTesoreria');
+      if (albaranes && albaranes.length > 0) {
+        tbodyVentas.innerHTML = albaranes.slice(0, 7).map(a => {
+          const imp = Number(a.total_importe || a.total || 0);
+
+          if (a.estado !== 'entregado' && a.estado !== 'cobrado') {
+            cobrosPendientes += imp;
+          }
+
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="p-2 font-bold text-slate-800">${a.numero_albaran || `ALB-${a.id.substring(0,6)}`}</td>
+              <td class="p-2 text-slate-500">${(a.fecha_salida || a.created_at || '').split('T')[0]}</td>
+              <td class="p-2 text-right font-bold text-emerald-700">${imp.toFixed(2)} €</td>
+            </tr>
+          `;
+        }).join('');
+
+        totalIngresos = albaranes.reduce((acc, a) => acc + Number(a.total_importe || a.total || 0), 0);
+      } else {
+        tbodyVentas.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-slate-400">Sin ventas registradas en esta empresa.</td></tr>';
+      }
+
+      const tbodyGastos = document.getElementById('tablaGastosTesoreria');
+      if (gastos && gastos.length > 0) {
+        tbodyGastos.innerHTML = gastos.slice(0, 7).map(g => {
+          const imp = Number(g.total || 0);
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="p-2 font-bold text-slate-800">${g.proveedor} (${g.concepto})</td>
+              <td class="p-2 text-slate-500">${g.fecha || '-'}</td>
+              <td class="p-2 text-right font-bold text-rose-700">${imp.toFixed(2)} €</td>
+            </tr>
+          `;
+        }).join('');
+
+        totalGastos = gastos.reduce((acc, g) => acc + Number(g.total || 0), 0);
+      } else {
+        tbodyGastos.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-slate-400">Sin gastos registrados en esta empresa.</td></tr>';
+      }
+
+      const beneficioNeto = totalIngresos - totalGastos;
+
+      document.getElementById('kpiIngresos').innerText = totalIngresos.toFixed(2) + ' €';
+      document.getElementById('kpiGastos').innerText = totalGastos.toFixed(2) + ' €';
+      
+      const kpiBen = document.getElementById('kpiBeneficio');
+      kpiBen.innerText = beneficioNeto.toFixed(2) + ' €';
+      if (beneficioNeto < 0) {
+        kpiBen.className = 'text-2xl font-extrabold text-rose-600 mt-1';
+      } else {
+        kpiBen.className = 'text-2xl font-extrabold text-blue-900 mt-1';
+      }
+
+      document.getElementById('kpiCobrosPendientes').innerText = cobrosPendientes.toFixed(2) + ' €';
+    }
+  </script>
+</body>
+</html>

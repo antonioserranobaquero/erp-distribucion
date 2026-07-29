@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de Control - ERP Distribución</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
+
+  <!-- CONTENIDO DASHBOARD -->
+  <div class="max-w-7xl mx-auto space-y-6 px-4 pt-4">
+
+    <!-- METRICAS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-blue-50 text-blue-600 rounded-xl text-xl"><i class="fa-solid fa-file-invoice"></i></div>
+        <div>
+          <span class="text-xs font-bold uppercase text-slate-400">Facturación Emitida</span>
+          <h3 id="statFacturacion" class="text-xl font-black text-slate-800 mt-0.5">0.00 €</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-amber-50 text-amber-600 rounded-xl text-xl"><i class="fa-solid fa-clock"></i></div>
+        <div>
+          <span class="text-xs font-bold uppercase text-slate-400">Pendiente de Cobro</span>
+          <h3 id="statPendiente" class="text-xl font-black text-amber-600 mt-0.5">0.00 €</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl text-xl"><i class="fa-solid fa-boxes-stacked"></i></div>
+        <div>
+          <span class="text-xs font-bold uppercase text-slate-400">Stock en Cómputo</span>
+          <h3 id="statStock" class="text-xl font-black text-indigo-600 mt-0.5">0.00 kg</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-rose-50 text-rose-600 rounded-xl text-xl"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div>
+          <span class="text-xs font-bold uppercase text-slate-400">Alertas Stock Bajo</span>
+          <h3 id="statAlertas" class="text-xl font-black text-rose-600 mt-0.5">0 Prod.</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACCESOS RÁPIDOS -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <h2 class="text-xs font-extrabold uppercase text-slate-400 tracking-wider flex items-center gap-2">
+        ⚡ Accesos Rápidos del Sistema
+      </h2>
+
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <a href="albaranes.html" class="p-4 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-center transition group">
+          <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">➕</div>
+          <span class="text-xs font-bold text-slate-800 group-hover:text-blue-700 block">Nuevo Albarán</span>
+        </a>
+
+        <a href="rutas.html" class="p-4 rounded-2xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-center transition group">
+          <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">🗺️</div>
+          <span class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 block">Ruta de Reparto</span>
+        </a>
+
+        <a href="compras.html" class="p-4 rounded-2xl bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-center transition group">
+          <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">🛒</div>
+          <span class="text-xs font-bold text-slate-800 group-hover:text-purple-700 block">Entrada Compra</span>
+        </a>
+
+        <a href="etiquetas.html" class="p-4 rounded-2xl bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 text-center transition group">
+          <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">🏷️</div>
+          <span class="text-xs font-bold text-slate-800 group-hover:text-amber-700 block">Imprimir Etiqueta</span>
+        </a>
+
+        <a href="clientes.html" class="p-4 rounded-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-center transition group">
+          <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">👥</div>
+          <span class="text-xs font-bold text-slate-800 group-hover:text-indigo-700 block">Ficha Clientes</span>
+        </a>
+
+        <a href="estadisticas.html" class="p-4 rounded-2xl bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-300 text-center transition group">
+          <div class="text-2xl mb-1 group-hover:scale-110 transition-transform">📊</div>
+          <span class="text-xs font-bold text-slate-800 group-hover:text-rose-700 block">Márgenes y Analítica</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- TABLAS DE RESUMEN -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- ÚLTIMOS ALBARANES -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <div class="flex justify-between items-center border-b pb-3">
+          <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+            📜 Últimos Albaranes Emitidos
+          </h3>
+          <a href="historico.html" class="text-xs font-bold text-blue-600 hover:underline transition">Ver todos →</a>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left text-slate-600">
+            <thead class="text-[10px] text-slate-400 uppercase bg-slate-100 border-b">
+              <tr>
+                <th class="py-2.5 px-3">Nº Albarán</th>
+                <th class="py-2.5 px-3">Cliente</th>
+                <th class="py-2.5 px-3 text-right">Importe (€)</th>
+                <th class="py-2.5 px-3 text-center">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="tablaUltimosAlbaranes" class="divide-y divide-slate-100">
+              <tr><td colspan="4" class="text-center py-6 text-slate-400">Cargando datos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PRODUCTOS STOCK MÍNIMO -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <div class="flex justify-between items-center border-b pb-3">
+          <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+            ⚠️ Productos con Stock Mínimo
+          </h3>
+          <a href="almacen.html" class="text-xs font-bold text-blue-600 hover:underline transition">Ir a Almacén →</a>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left text-slate-600">
+            <thead class="text-[10px] text-slate-400 uppercase bg-slate-100 border-b">
+              <tr>
+                <th class="py-2.5 px-3">Producto</th>
+                <th class="py-2.5 px-3 text-center">Kilos Disponibles</th>
+                <th class="py-2.5 px-3 text-center">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="tablaStockMinimo" class="divide-y divide-slate-100">
+              <tr><td colspan="3" class="text-center py-6 text-slate-400">Cargando stock...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    document.addEventListener('DOMContentLoaded', cargarDatosDashboard);
+
+    async function cargarDatosDashboard() {
+      const empresaId = getEmpresaIdActivo();
+
+      let qAlb = db.from('albaranes').select('*').order('created_at', { ascending: false });
+      if (empresaId) qAlb = qAlb.eq('empresa_id', empresaId);
+      const { data: albaranes } = await qAlb;
+
+      let qCli = db.from('clientes').select('*');
+      if (empresaId) qCli = qCli.eq('empresa_id', empresaId);
+      const { data: clientes } = await qCli;
+
+      let qProd = db.from('productos').select('*');
+      if (empresaId) qProd = qProd.eq('empresa_id', empresaId);
+      const { data: productos } = await qProd;
+
+      let qLin = db.from('lineas_albaran').select('*');
+      if (empresaId) qLin = qLin.eq('empresa_id', empresaId);
+      const { data: lineas } = await qLin;
+
+      let totalFacturado = 0;
+      let totalPendiente = 0;
+
+      if (albaranes) {
+        albaranes.forEach(a => {
+          const misLineas = lineas ? lineas.filter(l => String(l.albaran_id || l.id_albaran) === String(a.id)) : [];
+          let imp = Number(a.total_importe || a.total) || 0;
+
+          if (imp === 0 && misLineas.length > 0) {
+            imp = misLineas.reduce((acc, l) => acc + Number(l.subtotal || l.importe || ((Number(l.kilos)||0)*(Number(l.precio_kg||l.precio)||0))), 0);
+          }
+
+          if (a.estado === 'facturado') totalFacturado += imp;
+          else totalPendiente += imp;
+        });
+      }
+
+      document.getElementById('statFacturacion').innerText = totalFacturado.toFixed(2) + ' €';
+      document.getElementById('statPendiente').innerText = totalPendiente.toFixed(2) + ' €';
+
+      let stockKilosTotal = 0;
+      let contadorAlertas = 0;
+      const productosBajoMinimo = [];
+
+      if (productos) {
+        productos.forEach(p => {
+          const stock = Number(p.kilos_stock || p.stock_kilos || p.stock || 0);
+          stockKilosTotal += stock;
+
+          if (stock <= (p.stock_minimo_kilos || 20)) {
+            contadorAlertas++;
+            productosBajoMinimo.push({
+              nombre: p.nombre || p.nombre_producto || `Producto #${p.id}`,
+              stock: stock
+            });
+          }
+        });
+      }
+
+      document.getElementById('statStock').innerText = stockKilosTotal.toFixed(2) + ' kg';
+      document.getElementById('statAlertas').innerText = contadorAlertas + ' Prod.';
+
+      const tbodyAlb = document.getElementById('tablaUltimosAlbaranes');
+      tbodyAlb.innerHTML = '';
+
+      if (albaranes && albaranes.length > 0) {
+        albaranes.slice(0, 5).forEach(a => {
+          const cli = clientes ? clientes.find(c => String(c.id) === String(a.cliente_id)) : null;
+          const nomCliente = cli ? (cli.nombre_comercial || cli.nombre || cli.razon_social || 'Cliente') : 'Cliente';
+          const misLineas = lineas ? lineas.filter(l => String(l.albaran_id || l.id_albaran) === String(a.id)) : [];
+          
+          let imp = Number(a.total_importe || a.total) || 0;
+          if (imp === 0 && misLineas.length > 0) {
+            imp = misLineas.reduce((acc, l) => acc + Number(l.subtotal || l.importe || ((Number(l.kilos)||0)*(Number(l.precio_kg||l.precio)||0))), 0);
+          }
+
+          const esFacturado = a.estado === 'facturado';
+          const badgeClass = esFacturado ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
+
+          tbodyAlb.innerHTML += `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-3 font-mono font-bold text-blue-900">${a.numero_albaran || 'ALB-000'}</td>
+              <td class="py-2.5 px-3 font-bold text-slate-800">${nomCliente}</td>
+              <td class="py-2.5 px-3 text-right font-bold text-emerald-700">${imp.toFixed(2)} €</td>
+              <td class="py-2.5 px-3 text-center">
+                <span class="${badgeClass} text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">${a.estado || 'pendiente'}</span>
+              </td>
+            </tr>`;
+        });
+      } else {
+        tbodyAlb.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-slate-400">No hay albaranes registrados en esta empresa.</td></tr>';
+      }
+
+      const tbodyStock = document.getElementById('tablaStockMinimo');
+      tbodyStock.innerHTML = '';
+
+      if (productosBajoMinimo.length > 0) {
+        productosBajoMinimo.slice(0, 5).forEach(p => {
+          tbodyStock.innerHTML += `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-3 font-bold text-slate-800">${p.nombre}</td>
+              <td class="py-2.5 px-3 text-center font-bold text-rose-600">${p.stock.toFixed(2)} kg</td>
+              <td class="py-2.5 px-3 text-center">
+                <span class="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Bajo Mínimo</span>
+              </td>
+            </tr>`;
+        });
+      } else {
+        tbodyStock.innerHTML = '<tr><td colspan="3" class="text-center py-6 text-emerald-600 font-bold">✅ Nivel de stock óptimo.</td></tr>';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hoja de Carga de Almacén - ERP Distribución</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; padding: 0 !important; }
+      .sheet-print { border: none !important; box-shadow: none !important; padding: 0 !important; max-width: 100% !important; }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
+
+  <div class="max-w-6xl mx-auto space-y-6 px-4 pt-4 sheet-print">
+
+    <!-- CABECERA Y FILTROS -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4 no-print">
+      <div>
+        <h1 class="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-truck-ramp-box text-blue-600"></i> Hoja de Carga por Repartidor
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Filtrado y consolidación de mercancía para furgonetas de reparto</p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Repartidor / Ruta</label>
+          <select id="repartidorFiltroSelect" onchange="cargarHojaCarga()" class="bg-slate-50 border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-800">
+            <option value="TODOS">🚚 Todos los Repartidores</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Fecha Reparto</label>
+          <input type="date" id="fechaFiltroInput" onchange="cargarHojaCarga()" class="bg-slate-50 border border-slate-300 rounded-xl p-2 text-xs font-semibold text-slate-800">
+        </div>
+
+        <button onclick="window.print()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-5 py-2.5 rounded-xl shadow transition text-xs flex items-center gap-2 mt-auto">
+          🖨️ Imprimir Hoja
+        </button>
+      </div>
+    </div>
+
+    <!-- ENCABEZADO IMPRESIÓN PAPEL -->
+    <div class="hidden print:block border-b-2 border-slate-900 pb-4 mb-6">
+      <div class="flex justify-between items-start">
+        <div>
+          <h1 class="text-xl font-black text-slate-900">DISTRIBUCIONES CONGELADOS S.L.</h1>
+          <p class="text-xs text-slate-600">HOJA DE CARGA DE ALMACÉN Y PREPARACIÓN DE FURGONETAS</p>
+        </div>
+        <div class="text-right">
+          <p id="printRepartidor" class="text-xs font-bold text-blue-900 uppercase">Repartidor: Todos</p>
+          <p id="printFecha" class="text-sm font-bold text-slate-900">Fecha: --/--/----</p>
+          <p id="printTotalAlbaranes" class="text-xs text-slate-500">Albaranes incluidos: 0</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TARJETAS METRICAS -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-blue-50 text-blue-600 rounded-xl text-xl"><i class="fa-solid fa-file-lines"></i></div>
+        <div>
+          <span class="text-xs font-bold uppercase text-slate-400">Albaranes Asignados</span>
+          <h3 id="statTotalAlbaranes" class="text-xl font-extrabold text-slate-800 mt-0.5">0</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-amber-50 text-amber-600 rounded-xl text-xl"><i class="fa-solid fa-box"></i></div>
+        <div>
+          <span class="text-xs font-bold uppercase text-slate-400">Total Cajas a Sacar</span>
+          <h3 id="statTotalCajas" class="text-xl font-extrabold text-slate-800 mt-0.5">0</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+        <div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl text-xl"><i class="fa-solid fa-weight-hanging"></i></div>
+        <div>
+          <span class="text-xs font-bold uppercase text-slate-400">Total Pesaje Kilos</span>
+          <h3 id="statTotalKilos" class="text-xl font-extrabold text-slate-800 mt-0.5">0.00 kg</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLA CONSOLIDADA POR PRODUCTO -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h2 class="text-base font-extrabold text-slate-900 flex items-center gap-2">
+          🧊 1. Mercancía Consolidada a Sacar de la Cámara
+        </h2>
+        <span class="text-xs text-slate-400 font-bold uppercase">Suma total por artículo</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left text-slate-700">
+          <thead class="text-xs text-slate-500 uppercase bg-slate-100 border-b">
+            <tr>
+              <th class="py-3 px-4">Producto / Pescado</th>
+              <th class="py-3 px-4 text-center">Cajas Totales</th>
+              <th class="py-3 px-4 text-center">Kilos Totales</th>
+              <th class="py-3 px-4 text-right">Lotes Solicitados</th>
+            </tr>
+          </thead>
+          <tbody id="tablaConsolidadaBody" class="divide-y divide-slate-100">
+            <tr><td colspan="4" class="text-center py-8 text-slate-400">Cargando hoja de carga...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DESGLOSE POR CLIENTE -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h2 class="text-base font-extrabold text-slate-900 flex items-center gap-2">
+          📋 2. Desglose de Entrega por Cliente / Furgoneta
+        </h2>
+        <span class="text-xs text-slate-400 font-bold uppercase">Reparto de Bultos</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left text-slate-600">
+          <thead class="text-[10px] text-slate-400 uppercase bg-slate-100 border-b">
+            <tr>
+              <th class="py-2.5 px-3">Nº Albarán</th>
+              <th class="py-2.5 px-3">Cliente / Destinatario</th>
+              <th class="py-2.5 px-3">Repartidor Asignado</th>
+              <th class="py-2.5 px-3">Productos Incluidos</th>
+              <th class="py-2.5 px-3 text-center">Bultos (Cajas)</th>
+              <th class="py-2.5 px-3 text-right">Kilos</th>
+            </tr>
+          </thead>
+          <tbody id="tablaDesgloseBody" class="divide-y divide-slate-100">
+            <tr><td colspan="6" class="text-center py-6 text-slate-400">Cargando detalle de entregas...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const hoy = new Date().toISOString().split('T')[0];
+      document.getElementById('fechaFiltroInput').value = hoy;
+
+      await cargarRepartidoresSelect();
+      cargarHojaCarga();
+    });
+
+    async function cargarRepartidoresSelect() {
+      const empresaId = getEmpresaIdActivo();
+      let query = db.from('repartidores').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data: repData } = await query;
+      const select = document.getElementById('repartidorFiltroSelect');
+      
+      if (repData && repData.length > 0) {
+        repData.forEach(r => {
+          const nombreRep = r.nombre || r.nombre_repartidor || `Repartidor #${r.id}`;
+          const opt = document.createElement('option');
+          opt.value = nombreRep;
+          opt.innerText = '🛵 ' + nombreRep;
+          select.appendChild(opt);
+        });
+      }
+    }
+
+    async function cargarHojaCarga() {
+      const empresaId = getEmpresaIdActivo();
+      const fechaSel = document.getElementById('fechaFiltroInput').value;
+      const repartidorSel = document.getElementById('repartidorFiltroSelect').value;
+      
+      document.getElementById('printFecha').innerText = 'Fecha Reparto: ' + fechaSel;
+      const selectText = document.getElementById('repartidorFiltroSelect').selectedOptions[0].innerText;
+      document.getElementById('printRepartidor').innerText = 'Filtro: ' + selectText;
+
+      let qAlb = db.from('albaranes').select('*');
+      if (empresaId) qAlb = qAlb.eq('empresa_id', empresaId);
+      const { data: albaranes, error: errAlb } = await qAlb;
+
+      let qCli = db.from('clientes').select('*');
+      if (empresaId) qCli = qCli.eq('empresa_id', empresaId);
+      const { data: clientes } = await qCli;
+
+      let qProd = db.from('productos').select('*');
+      if (empresaId) qProd = qProd.eq('empresa_id', empresaId);
+      const { data: productos } = await qProd;
+
+      let qLin = db.from('lineas_albaran').select('*');
+      if (empresaId) qLin = qLin.eq('empresa_id', empresaId);
+      const { data: lineas } = await qLin;
+
+      if (errAlb || !albaranes) {
+        document.getElementById('tablaConsolidadaBody').innerHTML = '<tr><td colspan="4" class="text-center py-8 text-rose-500 font-bold">Error cargando datos de almacén.</td></tr>';
+        return;
+      }
+
+      const prodMap = {};
+      if (productos) productos.forEach(p => prodMap[p.id] = p.nombre || p.nombre_producto || `Producto #${p.id}`);
+
+      const cliMap = {};
+      if (clientes) clientes.forEach(c => cliMap[c.id] = c.nombre_comercial || c.nombre || c.razon_social || `Cliente #${c.id}`);
+
+      let albaranesFiltrados = albaranes.filter(a => {
+        const f = (a.fecha_salida || a.fecha || a.created_at || '').split('T')[0];
+        return f === fechaSel;
+      });
+
+      if (repartidorSel !== 'TODOS') {
+        albaranesFiltrados = albaranesFiltrados.filter(a => String(a.repartidor) === String(repartidorSel));
+      }
+
+      document.getElementById('statTotalAlbaranes').innerText = albaranesFiltrados.length;
+      document.getElementById('printTotalAlbaranes').innerText = `Albaranes incluidos: ${albaranesFiltrados.length}`;
+
+      if (albaranesFiltrados.length === 0) {
+        document.getElementById('tablaConsolidadaBody').innerHTML = '<tr><td colspan="4" class="text-center py-8 text-slate-400">No hay albaranes para este repartidor en esta fecha.</td></tr>';
+        document.getElementById('tablaDesgloseBody').innerHTML = '<tr><td colspan="6" class="text-center py-6 text-slate-400">Sin registros.</td></tr>';
+        document.getElementById('statTotalCajas').innerText = '0';
+        document.getElementById('statTotalKilos').innerText = '0.00 kg';
+        return;
+      }
+
+      const idsAlbDia = new Set(albaranesFiltrados.map(a => String(a.id)));
+      const lineasFiltradas = lineas ? lineas.filter(l => idsAlbDia.has(String(l.albaran_id || l.id_albaran))) : [];
+
+      const consolidado = {};
+      let granTotalCajas = 0;
+      let granTotalKilos = 0;
+
+      lineasFiltradas.forEach(l => {
+        const prodId = l.producto_id;
+        const nombreProd = prodMap[prodId] || l.nombre_producto || `Producto #${prodId}`;
+        const cajas = Number(l.cajas) || 0;
+        const kilos = Number(l.kilos) || 0;
+        const lote = l.lote || 'LOT-GENERAL';
+
+        granTotalCajas += cajas;
+        granTotalKilos += kilos;
+
+        if (!consolidado[prodId]) {
+          consolidado[prodId] = {
+            nombre: nombreProd,
+            cajas: 0,
+            kilos: 0,
+            lotesSet: new Set()
+          };
+        }
+
+        consolidado[prodId].cajas += cajas;
+        consolidado[prodId].kilos += kilos;
+        if (lote) consolidado[prodId].lotesSet.add(lote);
+      });
+
+      document.getElementById('statTotalCajas').innerText = granTotalCajas;
+      document.getElementById('statTotalKilos').innerText = granTotalKilos.toFixed(2) + ' kg';
+
+      const tbodyCons = document.getElementById('tablaConsolidadaBody');
+      tbodyCons.innerHTML = '';
+
+      Object.values(consolidado).forEach(item => {
+        const lotesStr = Array.from(item.lotesSet).join(', ') || '-';
+        tbodyCons.innerHTML += `
+          <tr class="border-b bg-white hover:bg-slate-50 transition">
+            <td class="py-3 px-4 font-bold text-slate-900">${item.nombre}</td>
+            <td class="py-3 px-4 text-center font-extrabold text-blue-900 text-base">${item.cajas} caj.</td>
+            <td class="py-3 px-4 text-center font-extrabold text-emerald-700 text-base">${item.kilos.toFixed(2)} kg</td>
+            <td class="py-3 px-4 text-right font-mono text-xs text-slate-500">${lotesStr}</td>
+          </tr>`;
+      });
+
+      const tbodyDesg = document.getElementById('tablaDesgloseBody');
+      tbodyDesg.innerHTML = '';
+
+      albaranesFiltrados.forEach(a => {
+        const nomCliente = cliMap[a.cliente_id] || 'Cliente Desconocido';
+        const misLineas = lineasFiltradas.filter(l => String(l.albaran_id || l.id_albaran) === String(a.id));
+        const repAsignado = a.repartidor || 'Sin Asignar';
+
+        const prodResumen = misLineas.map(l => {
+          const np = prodMap[l.producto_id] || 'Prod';
+          return `${l.cajas || 0}c (${np})`;
+        }).join(', ');
+
+        const cj = misLineas.reduce((acc, l) => acc + (Number(l.cajas)||0), 0);
+        const kg = misLineas.reduce((acc, l) => acc + (Number(l.kilos)||0), 0);
+
+        tbodyDesg.innerHTML += `
+          <tr class="border-b bg-white hover:bg-slate-50 transition">
+            <td class="py-2.5 px-3 font-mono font-bold text-blue-900">${a.numero_albaran || 'ALB-000'}</td>
+            <td class="py-2.5 px-3 font-bold text-slate-800">${nomCliente}</td>
+            <td class="py-2.5 px-3 text-xs font-semibold text-blue-700">${repAsignado}</td>
+            <td class="py-2.5 px-3 text-xs text-slate-600">${prodResumen || 'Sin detalle'}</td>
+            <td class="py-2.5 px-3 text-center font-bold">${cj} caj.</td>
+            <td class="py-2.5 px-3 text-right font-bold text-emerald-700">${kg.toFixed(2)} kg</td>
+          </tr>`;
+      });
+    }
+  </script>
+</body>
+</html>
