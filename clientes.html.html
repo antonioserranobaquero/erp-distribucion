@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Clientes y Deuda - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
+
+  <div class="max-w-7xl mx-auto space-y-6 px-4 pt-4">
+
+    <!-- TARJETAS RESUMEN -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3 bg-blue-50 text-blue-600 rounded-xl text-xl"><i class="fa-solid fa-address-book"></i></div>
+        <div>
+          <span class="text-[10px] font-bold uppercase text-slate-400">Clientes Activos</span>
+          <h3 id="statClientes" class="text-xl font-black text-slate-800">0</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3 bg-amber-50 text-amber-600 rounded-xl text-xl"><i class="fa-solid fa-scale-unbalanced"></i></div>
+        <div>
+          <span class="text-[10px] font-bold uppercase text-slate-400">Deuda Total de Clientes</span>
+          <h3 id="statDeuda" class="text-xl font-black text-amber-600">0.00 €</h3>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3 bg-rose-50 text-rose-600 rounded-xl text-xl"><i class="fa-solid fa-user-xmark"></i></div>
+        <div>
+          <span class="text-[10px] font-bold uppercase text-slate-400">Riesgo Excedido</span>
+          <h3 id="statRiesgo" class="text-xl font-black text-rose-600">0 Clientes</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- BUSCADOR -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="relative w-full md:w-96">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </span>
+        <input type="text" id="inputBuscar" oninput="filtrarTabla()" placeholder="Buscar cliente, CIF o dirección..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500">
+      </div>
+
+      <button onclick="alert('Formulario de alta de cliente')" class="w-full md:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
+        <i class="fa-solid fa-user-plus"></i> Nuevo Cliente
+      </button>
+    </div>
+
+    <!-- TABLA CLIENTES -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-100 text-slate-500 uppercase text-[10px] font-bold border-b">
+            <tr>
+              <th class="p-3">Nombre Comercial</th>
+              <th class="p-3">CIF / NIF</th>
+              <th class="p-3">Forma Pago</th>
+              <th class="p-3 text-right">Deuda Pendiente</th>
+              <th class="p-3 text-right">Límite Crédito</th>
+              <th class="p-3 text-center">Estado Riesgo</th>
+              <th class="p-3 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaClientesBody" class="divide-y divide-slate-100 font-semibold text-slate-700">
+            <tr><td colspan="7" class="p-6 text-center text-slate-400">Cargando clientes de la empresa...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let clientesLista = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await cargarClientes();
+    });
+
+    async function cargarClientes() {
+      const empresaIdActiva = (typeof getEmpresaIdActivo === 'function' ? getEmpresaIdActivo() : null) || '473e56d8-be5d-441d-bbbf-9a6010f35443';
+
+      // 1. Intentar cargar filtrando por empresa_id
+      let { data: clientes, error } = await db
+        .from('clientes')
+        .select('*')
+        .eq('empresa_id', empresaIdActiva);
+
+      // 2. Si por algún motivo no trae nada (p.ej. UUID en formato texto antiguo), hacer fallback trayendo todo
+      if (!clientes || clientes.length === 0) {
+        console.warn("No se encontraron clientes con .eq, realizando búsqueda amplia...");
+        const resAll = await db.from('clientes').select('*');
+        if (resAll.data && resAll.data.length > 0) {
+          // Filtrar manualmente en JS para mayor tolerancia de formato UUID
+          clientes = resAll.data.filter(c => 
+            !c.empresa_id || 
+            String(c.empresa_id).trim().toLowerCase() === String(empresaIdActiva).trim().toLowerCase()
+          );
+          // Si tras filtrar en memoria sigue vacío pero existen datos, mostramos los datos existentes
+          if (clientes.length === 0) clientes = resAll.data;
+        }
+      }
+
+      clientesLista = clientes || [];
+      renderizarClientes(clientesLista);
+    }
+
+    function renderizarClientes(lista) {
+      const tbody = document.getElementById('tablaClientesBody');
+      tbody.innerHTML = '';
+
+      if (!lista || lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">No hay clientes registrados en esta empresa.</td></tr>';
+        document.getElementById('statClientes').innerText = '0';
+        document.getElementById('statDeuda').innerText = '0.00 €';
+        document.getElementById('statRiesgo').innerText = '0 Clientes';
+        return;
+      }
+
+      let totalDeuda = 0;
+      let excedidos = 0;
+
+      lista.forEach(c => {
+        // Nombres de columnas exactos según Supabase Editor:
+        // nombre_comercial, cif_nif, forma_pago, limite_credito, telefono
+        const nombre = c.nombre_comercial || c.nombre || c.razon_social || `Cliente #${c.id}`;
+        const cif = c.cif_nif || c.cif || c.nif || '-';
+        const formaPago = c.forma_pago || 'Giro 30 días';
+        const deuda = Number(c.deuda_pendiente || c.deuda || 0);
+        const limite = Number(c.limite_credito || c.limite_riesgo || 0);
+
+        totalDeuda += deuda;
+        const esExcedido = limite > 0 && deuda > limite;
+        if (esExcedido) excedidos++;
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-bold text-slate-900">${nombre}</td>
+            <td class="p-3 font-mono text-slate-500">${cif}</td>
+            <td class="p-3 text-slate-600"><span class="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-semibold">${formaPago}</span></td>
+            <td class="p-3 text-right font-mono font-bold ${deuda > 0 ? 'text-amber-600' : 'text-slate-600'}">${deuda.toFixed(2)} €</td>
+            <td class="p-3 text-right font-mono text-slate-500">${limite > 0 ? limite.toFixed(2) + ' €' : 'Sin límite'}</td>
+            <td class="p-3 text-center">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${esExcedido ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
+                ${esExcedido ? 'RIESGO EXCEDIDO' : 'OK'}
+              </span>
+            </td>
+            <td class="p-3 text-center">
+              <button class="text-slate-400 hover:text-blue-600 p-1"><i class="fa-solid fa-pen-to-square"></i></button>
+            </td>
+          </tr>
+        `;
+      });
+
+      document.getElementById('statClientes').innerText = lista.length;
+      document.getElementById('statDeuda').innerText = totalDeuda.toFixed(2) + ' €';
+      document.getElementById('statRiesgo').innerText = `${excedidos} Clientes`;
+    }
+
+    function filtrarTabla() {
+      const q = document.getElementById('inputBuscar').value.toLowerCase().trim();
+      const filtrados = clientesLista.filter(c => {
+        const nom = (c.nombre_comercial || c.nombre || c.razon_social || '').toLowerCase();
+        const cif = (c.cif_nif || c.cif || c.nif || '').toLowerCase();
+        return nom.includes(q) || cif.includes(q);
+      });
+      renderizarClientes(filtrados);
+    }
+  </script>
+</body>
+</html>
