@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Importador Universal CSV - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client, PapaParse & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
+
+  <div class="max-w-4xl mx-auto space-y-6 px-4 pt-6">
+
+    <!-- CABECERA -->
+    <div class="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <div>
+        <h1 class="text-xl font-black text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-file-csv text-blue-600"></i> Importador Universal de Datos CSV / Excel
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Sube cualquier archivo CSV y mapea las columnas visualmente sin errores ni duplicados</p>
+      </div>
+      <a href="index.html" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+        ← Volver al Inicio
+      </a>
+    </div>
+
+    <!-- PASO 1: SELECCIÓN DE ARCHIVO Y TABLA -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Paso 1: Archivo y Destino</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tabla Destino en Base de Datos</label>
+          <select id="tablaDestino" onchange="reiniciarMapeo()" class="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 bg-slate-50">
+            <option value="clientes">👥 Tabla: Clientes</option>
+            <option value="productos">🏷️ Tabla: Productos</option>
+            <option value="proveedores">🚚 Tabla: Proveedores</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Selecciona tu archivo (.CSV)</label>
+          <input type="file" id="csvFileInput" accept=".csv" onchange="analizarCSV()" class="w-full p-2 border border-slate-300 rounded-xl text-xs bg-slate-50 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+        </div>
+      </div>
+    </div>
+
+    <!-- PASO 2: MAPEADOR VISUAL DE COLUMNAS -->
+    <div id="stepMapeo" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4 hidden">
+      <div class="flex justify-between items-center border-b pb-3">
+        <div>
+          <h2 class="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-blue-600"></i> Paso 2: Relaciona las columnas del CSV con la Base de Datos
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">Confirma qué dato del CSV corresponde a cada campo del ERP</p>
+        </div>
+        <span id="badgeFilasDetectadas" class="bg-blue-100 text-blue-800 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase">0 filas detectadas</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-100 text-slate-500 uppercase text-[10px]">
+              <th class="p-3 border-b">Columna en tu CSV</th>
+              <th class="p-3 border-b">Ejemplo de Dato (Fila 1)</th>
+              <th class="p-3 border-b">Campo en el ERP (Supabase)</th>
+            </tr>
+          </thead>
+          <tbody id="tablaMapeoBody" class="divide-y divide-slate-100">
+            <!-- Filas generadas dinámicamente -->
+          </tbody>
+        </table>
+      </div>
+
+      <button onclick="ejecutarImportacion()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm">
+        <i class="fa-solid fa-cloud-arrow-up"></i> Confirmar e Importar Datos
+      </button>
+    </div>
+
+    <!-- ESTADO DE LA IMPORTACIÓN -->
+    <div id="boxResultado" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-2 hidden">
+      <h3 class="text-xs font-bold text-slate-700 uppercase">Resultado del Proceso</h3>
+      <div id="statusMessage" class="p-4 rounded-xl text-xs font-mono"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let parsedRowsData = [];
+    let csvHeadersFound = [];
+
+    // Campos disponibles en Supabase por tabla
+    const CAMPOS_BD = {
+      clientes: [
+        { value: '', label: '🛑 Ignorar esta columna' },
+        { value: 'nombre_comercial', label: '👤 Nombre / Cliente / Razón Social' },
+        { value: 'cif_nif', label: '📄 CIF / NIF / DNI' },
+        { value: 'telefono', label: '📞 Teléfono' },
+        { value: 'direccion', label: '📍 Dirección' },
+        { value: 'poblacion', label: '🏙️ Población / Localidad' },
+        { value: 'email', label: '✉️ Email de Contacto' }
+      ],
+      productos: [
+        { value: '', label: '🛑 Ignorar esta columna' },
+        { value: 'nombre', label: '🏷️ Nombre del Producto' },
+        { value: 'precio_venta', label: '💶 Precio de Venta (PVP)' },
+        { value: 'precio_coste', label: '📉 Precio de Coste' },
+        { value: 'stock_kg', label: '📦 Stock Disponible (Kg/Uds)' },
+        { value: 'codigo_barras', label: '🔢 Código / Ref' }
+      ],
+      proveedores: [
+        { value: '', label: '🛑 Ignorar esta columna' },
+        { value: 'nombre', label: '🚚 Nombre del Proveedor' },
+        { value: 'cif_nif', label: '📄 CIF / NIF' },
+        { value: 'telefono', label: '📞 Teléfono' },
+        { value: 'email', label: '✉️ Email' }
+      ]
+    };
+
+    function reiniciarMapeo() {
+      document.getElementById('stepMapeo').classList.add('hidden');
+      document.getElementById('boxResultado').classList.add('hidden');
+      document.getElementById('csvFileInput').value = '';
+    }
+
+    function analizarCSV() {
+      const fileInput = document.getElementById('csvFileInput');
+      if (!fileInput.files || fileInput.files.length === 0) return;
+
+      const file = fileInput.files[0];
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          if (!results.data || results.data.length === 0) {
+            alert("El archivo CSV está vacío o no se pudo leer correctamente.");
+            return;
+          }
+
+          parsedRowsData = results.data;
+          csvHeadersFound = Object.keys(results.data[0]);
+
+          document.getElementById('badgeFilasDetectadas').innerText = `${parsedRowsData.length} filas detectadas`;
+          renderizarTablaMapeo();
+          document.getElementById('stepMapeo').classList.remove('hidden');
+          document.getElementById('boxResultado').classList.add('hidden');
+        }
+      });
+    }
+
+    function renderizarTablaMapeo() {
+      const tabla = document.getElementById('tablaDestino').value;
+      const opcionesCampos = CAMPOS_BD[tabla] || [];
+      const tbody = document.getElementById('tablaMapeoBody');
+      const primerEjemplo = parsedRowsData[0] || {};
+
+      tbody.innerHTML = csvHeadersFound.map((header, idx) => {
+        const ejemploDato = primerEjemplo[header] || '-';
+
+        let selectedValue = '';
+        const hLimpia = header.trim().toLowerCase();
+
+        if (hLimpia.includes('cliente') || hLimpia.includes('nombre') || hLimpia.includes('producto') || hLimpia.includes('razon')) {
+          selectedValue = (tabla === 'clientes') ? 'nombre_comercial' : 'nombre';
+        }
+        else if (hLimpia.includes('cif') || hLimpia.includes('nif') || hLimpia.includes('dni')) selectedValue = 'cif_nif';
+        else if (hLimpia.includes('telef') || hLimpia.includes('tlf') || hLimpia.includes('movil')) selectedValue = 'telefono';
+        else if (hLimpia.includes('direc') || hLimpia.includes('domicilio')) selectedValue = 'direccion';
+        else if (hLimpia.includes('pobla') || hLimpia.includes('localid') || hLimpia.includes('ciudad')) selectedValue = 'poblacion';
+        else if (hLimpia.includes('mail') || hLimpia.includes('correo')) selectedValue = 'email';
+        else if (hLimpia.includes('precio') || hLimpia.includes('pvp')) selectedValue = 'precio_venta';
+        else if (hLimpia.includes('coste')) selectedValue = 'precio_coste';
+        else if (hLimpia.includes('stock') || hLimpia.includes('kilo')) selectedValue = 'stock_kg';
+
+        const selectOptions = opcionesCampos.map(c => 
+          `<option value="${c.value}" ${c.value === selectedValue ? 'selected' : ''}>${c.label}</option>`
+        ).join('');
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-bold text-slate-800">${header}</td>
+            <td class="p-3 text-slate-500 font-mono text-[11px] truncate max-w-[200px]">${ejemploDato}</td>
+            <td class="p-3">
+              <select id="map_select_${idx}" data-csv-header="${header}" class="w-full p-2 border border-slate-300 rounded-xl font-bold text-xs bg-white text-slate-800">
+                ${selectOptions}
+              </select>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function ejecutarImportacion() {
+      const tabla = document.getElementById('tablaDestino').value;
+      const boxRes = document.getElementById('boxResultado');
+      const statusMsg = document.getElementById('statusMessage');
+      const empresaIdActual = getEmpresaIdActivo();
+
+      if (!empresaIdActual) return alert("No se ha detectado una empresa activa en la sesión.");
+
+      const mapaFinal = {};
+      csvHeadersFound.forEach((header, idx) => {
+        const select = document.getElementById(`map_select_${idx}`);
+        if (select && select.value !== '') {
+          mapaFinal[header] = select.value;
+        }
+      });
+
+      if (Object.keys(mapaFinal).length === 0) {
+        return alert("Debes asignar al menos una columna del CSV a un campo del ERP.");
+      }
+
+      boxRes.classList.remove('hidden');
+      statusMsg.className = "p-4 rounded-xl text-xs font-mono bg-blue-50 text-blue-800 border border-blue-200";
+      statusMsg.innerText = "⏳ Depurando duplicados y procesando registros...";
+
+      // 1. Extraer y formatear todas las filas
+      const filasConvertidas = parsedRowsData.map(row => {
+        const nuevaFila = { empresa_id: empresaIdActual };
+        Object.keys(mapaFinal).forEach(csvCol => {
+          const campoBD = mapaFinal[csvCol];
+          let val = row[csvCol];
+
+          if (val !== undefined && val !== null) {
+            val = String(val).trim();
+            if (campoBD === 'precio_venta' || campoBD === 'precio_coste' || campoBD === 'stock_kg') {
+              val = val.replace('€', '').replace(',', '.').trim();
+              val = parseFloat(val) || 0;
+            }
+            if (val !== '') nuevaFila[campoBD] = val;
+          }
+        });
+        return nuevaFila;
+      });
+
+      // 2. Si la tabla es CLIENTES, descartar nombres duplicados del CSV
+      let filasFinales = filasConvertidas;
+      if (tabla === 'clientes') {
+        const clientesUnicosMap = new Map();
+        filasConvertidas.forEach(item => {
+          const nombreKey = item.nombre_comercial || item.nombre;
+          if (nombreKey && !clientesUnicosMap.has(nombreKey.toLowerCase())) {
+            clientesUnicosMap.set(nombreKey.toLowerCase(), item);
+          }
+        });
+        filasFinales = Array.from(clientesUnicosMap.values());
+      }
+
+      // 3. Insertar solo los registros únicos
+      const { data, error } = await dbClient.from(tabla).insert(filasFinales);
+
+      if (error) {
+        statusMsg.className = "p-4 rounded-xl text-xs font-mono bg-rose-50 text-rose-800 border border-rose-200";
+        statusMsg.innerText = `❌ Error al importar en Supabase: ${error.message}`;
+      } else {
+        statusMsg.className = "p-4 rounded-xl text-xs font-mono bg-emerald-50 text-emerald-800 border border-emerald-200";
+        statusMsg.innerText = `🎉 ¡Éxito! Se han creado ${filasFinales.length} registros únicos en la tabla "${tabla}".`;
+        document.getElementById('stepMapeo').classList.add('hidden');
+        document.getElementById('csvFileInput').value = '';
+      }
+    }
+  </script>
+</body>
+</html>
