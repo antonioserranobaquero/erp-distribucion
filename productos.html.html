@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catálogo de Productos - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <div class="max-w-7xl mx-auto space-y-6 px-4 pt-6">
+
+    <!-- FORMULARIO AÑADIR PRODUCTO -->
+    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+      <h2 class="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-square-plus text-emerald-600 text-base"></i> Añadir Producto al Catálogo
+      </h2>
+
+      <form onsubmit="guardarProducto(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre del Producto</label>
+          <input type="text" id="pNombre" required placeholder="Ej: Calamar 20/30" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Código / Ref.</label>
+          <input type="text" id="pCodigo" placeholder="Ej: CAL-01" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Precio Venta (€ / KG)</label>
+          <input type="number" step="0.01" id="pPrecio" required placeholder="12.50" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Categoría</label>
+          <input type="text" id="pCategoria" placeholder="Ej: Cefalópodos" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+
+        <div class="md:col-span-4 flex justify-end pt-1">
+          <button type="submit" id="btnGuardarProd" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider shadow transition flex items-center gap-2">
+            <i class="fa-solid fa-plus"></i> Guardar Producto en Catálogo
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- BARRA DE BÚSQUEDA Y CONTADOR -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="relative w-full md:w-96">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </span>
+        <input type="text" id="inputBuscarProd" oninput="filtrarProductos()" placeholder="Buscar por producto, referencia o categoría..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+      </div>
+
+      <div id="statTotalArticulos" class="px-4 py-1.5 bg-blue-50 text-blue-700 font-black rounded-xl text-xs border border-blue-200">
+        0 Artículos
+      </div>
+    </div>
+
+    <!-- TABLA PRODUCTOS -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-100/80 text-slate-500 uppercase text-[10px] font-bold border-b border-slate-200">
+            <tr>
+              <th class="p-3.5">Ref</th>
+              <th class="p-3.5">Producto</th>
+              <th class="p-3.5">Categoría</th>
+              <th class="p-3.5 text-right">Precio (€/KG)</th>
+              <th class="p-3.5 text-center">Stock Cajas</th>
+              <th class="p-3.5 text-center">Stock (KG)</th>
+              <th class="p-3.5 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaProductosBody" class="divide-y divide-slate-100 font-semibold text-slate-700">
+            <tr><td colspan="7" class="p-6 text-center text-slate-400">Cargando catálogo...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL EDITAR PRODUCTO -->
+  <div id="modalEditarProd" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-extrabold text-slate-800 flex items-center gap-2 text-sm">
+          <i class="fa-solid fa-pen-to-square text-blue-600"></i> Modificar Ficha de Producto
+        </h3>
+        <button onclick="cerrarModalEditar()" class="text-slate-400 hover:text-slate-600 font-black text-sm">✕</button>
+      </div>
+
+      <input type="hidden" id="editProdId">
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <div class="md:col-span-2">
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre</label>
+          <input type="text" id="editNombre" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-slate-800 focus:border-blue-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Código / Ref</label>
+          <input type="text" id="editCodigo" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-slate-800 focus:border-blue-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Categoría</label>
+          <input type="text" id="editCategoria" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-slate-800 focus:border-blue-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Precio (€ / KG)</label>
+          <input type="number" step="0.01" id="editPrecio" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-emerald-600 focus:border-blue-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cajas Almacén</label>
+          <input type="number" id="editCajas" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-slate-800 focus:border-blue-500 focus:outline-none">
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kilos Totales en Stock (KG)</label>
+          <input type="number" step="0.01" id="editKilos" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-slate-800 focus:border-blue-500 focus:outline-none">
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 border-t pt-4">
+        <button onclick="cerrarModalEditar()" class="px-4 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-200">Cancelar</button>
+        <button onclick="guardarEdicionProducto()" id="btnGuardarEdicion" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow">
+          <i class="fa-solid fa-check mr-1"></i> Guardar Cambios
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let productosLista = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await cargarProductos();
+    });
+
+    async function cargarProductos() {
+      const empresaIdActiva = getEmpresaIdActivo();
+      let query = db.from('productos').select('*');
+      if (empresaIdActiva) query = query.eq('empresa_id', empresaIdActiva);
+
+      const { data, error } = await query.order('nombre', { ascending: true });
+      if (error) console.error(error);
+
+      productosLista = data || [];
+      renderizarProductos(productosLista);
+    }
+
+    function renderizarProductos(lista) {
+      const tbody = document.getElementById('tablaProductosBody');
+      tbody.innerHTML = '';
+
+      if (!lista || lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">No hay artículos registrados para esta empresa.</td></tr>';
+        document.getElementById('statTotalArticulos').innerText = '0 Artículos';
+        return;
+      }
+
+      lista.forEach(p => {
+        const ref = p.codigo || p.referencia || 'S/C';
+        const nombre = p.nombre || p.nombre_producto || 'Producto sin nombre';
+        const categoria = p.categoria || 'General';
+        const precio = Number(p.precio_kg || p.precio_venta || p.pvp || p.precio || 0);
+        const cajas = Number(p.cajas_stock || p.stock_cajas || 0);
+        const kilos = Number(p.kilos_stock || p.stock_kg || 0);
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-blue-50/40 transition">
+            <td class="p-3.5 font-mono text-slate-400 text-[11px] font-bold">${ref}</td>
+            <td class="p-3.5 font-bold text-slate-900">${nombre}</td>
+            <td class="p-3.5"><span class="bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-md text-[10px] font-bold border border-slate-200">${categoria}</span></td>
+            <td class="p-3.5 text-right font-mono font-extrabold text-emerald-600">${precio.toFixed(2)} €</td>
+            <td class="p-3.5 text-center font-mono font-bold text-slate-700">${cajas}</td>
+            <td class="p-3.5 text-center font-mono font-bold ${kilos < 20 ? 'text-rose-600' : 'text-slate-800'}">${kilos.toFixed(2)} kg</td>
+            <td class="p-3.5 text-center space-x-1">
+              <button onclick="abrirModalEditar('${p.id}')" class="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition" title="Editar Producto">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button onclick="eliminarProducto('${p.id}')" class="p-1.5 text-rose-500 hover:bg-rose-100 rounded-lg transition" title="Eliminar">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+
+      document.getElementById('statTotalArticulos').innerText = `${lista.length} Artículos`;
+    }
+
+    function filtrarProductos() {
+      const q = document.getElementById('inputBuscarProd').value.toLowerCase().trim();
+      const filtrados = productosLista.filter(p => {
+        const nom = (p.nombre || '').toLowerCase();
+        const ref = (p.codigo || '').toLowerCase();
+        const cat = (p.categoria || '').toLowerCase();
+        return nom.includes(q) || ref.includes(q) || cat.includes(q);
+      });
+      renderizarProductos(filtrados);
+    }
+
+    async function guardarProducto(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnGuardarProd');
+      const empresaIdActiva = getEmpresaIdActivo();
+      const precioInput = parseFloat(document.getElementById('pPrecio').value) || 0;
+
+      const nuevoProd = {
+        empresa_id: empresaIdActiva,
+        nombre: document.getElementById('pNombre').value.trim(),
+        codigo: document.getElementById('pCodigo').value.trim() || null,
+        precio_kg: precioInput,
+        precio_venta: precioInput,
+        categoria: document.getElementById('pCategoria').value.trim() || 'General',
+        kilos_stock: 0,
+        cajas_stock: 0
+      };
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+
+      const { error } = await db.from('productos').insert([nuevoProd]);
+
+      if (error) {
+        alert("Error al guardar: " + error.message);
+      } else {
+        document.getElementById('pNombre').value = '';
+        document.getElementById('pCodigo').value = '';
+        document.getElementById('pPrecio').value = '';
+        document.getElementById('pCategoria').value = '';
+        await cargarProductos();
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-plus"></i> Guardar Producto en Catálogo';
+    }
+
+    function abrirModalEditar(id) {
+      const p = productosLista.find(item => item.id == id);
+      if (!p) return;
+
+      document.getElementById('editProdId').value = p.id;
+      document.getElementById('editNombre').value = p.nombre || '';
+      document.getElementById('editCodigo').value = p.codigo || '';
+      document.getElementById('editCategoria').value = p.categoria || '';
+      document.getElementById('editPrecio').value = parseFloat(p.precio_kg || p.precio_venta || 0);
+      document.getElementById('editCajas').value = parseInt(p.cajas_stock || 0);
+      document.getElementById('editKilos').value = parseFloat(p.kilos_stock || p.stock_kg || 0);
+
+      document.getElementById('modalEditarProd').classList.remove('hidden');
+      document.getElementById('modalEditarProd').classList.add('flex');
+    }
+
+    function cerrarModalEditar() {
+      document.getElementById('modalEditarProd').classList.add('hidden');
+      document.getElementById('modalEditarProd').classList.remove('flex');
+    }
+
+    async function guardarEdicionProducto() {
+      const id = document.getElementById('editProdId').value;
+      const btn = document.getElementById('btnGuardarEdicion');
+
+      const datosActualizados = {
+        nombre: document.getElementById('editNombre').value.trim(),
+        codigo: document.getElementById('editCodigo').value.trim() || null,
+        categoria: document.getElementById('editCategoria').value.trim() || 'General',
+        precio_kg: parseFloat(document.getElementById('editPrecio').value) || 0,
+        precio_venta: parseFloat(document.getElementById('editPrecio').value) || 0,
+        cajas_stock: parseInt(document.getElementById('editCajas').value) || 0,
+        kilos_stock: parseFloat(document.getElementById('editKilos').value) || 0,
+        stock_kg: parseFloat(document.getElementById('editKilos').value) || 0
+      };
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+
+      const { error } = await db.from('productos').update(datosActualizados).eq('id', id);
+
+      if (error) {
+        alert("Error al actualizar producto: " + error.message);
+      } else {
+        cerrarModalEditar();
+        await cargarProductos();
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Guardar Cambios';
+    }
+
+    async function eliminarProducto(id) {
+      if (!confirm("¿Seguro que deseas eliminar este producto?")) return;
+      const { error } = await db.from('productos').delete().eq('id', id);
+      if (error) alert("Error al eliminar: " + error.message);
+      else await cargarProductos();
+    }
+  </script>
+</body>
+</html>
