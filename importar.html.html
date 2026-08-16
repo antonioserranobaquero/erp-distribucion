@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Importador Universal CSV - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client, PapaParse & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #0f172a; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100 pb-12">
+
+  <div class="max-w-4xl mx-auto space-y-6 px-4 pt-6">
+
+    <!-- CABECERA -->
+    <div class="flex justify-between items-center bg-slate-900/90 border border-slate-800 p-6 rounded-3xl shadow-xl backdrop-blur-md">
+      <div>
+        <h1 class="text-xl font-black text-white flex items-center gap-2">
+          <i class="fa-solid fa-file-csv text-blue-500"></i> Importador Universal de Datos
+        </h1>
+        <p class="text-xs text-slate-400 mt-1">Carga masiva de productos o clientes desde cualquier ERP anterior (FactuSOL, ClassicGes, Sage, Excel).</p>
+      </div>
+      <a href="index.html" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition flex items-center gap-2">
+        <i class="fa-solid fa-arrow-left"></i> Inicio
+      </a>
+    </div>
+
+    <!-- PASO 1: SELECCIÓN DE TABLA Y ARCHIVO -->
+    <div class="bg-slate-900/90 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4">
+      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Paso 1: Selecciona Destino y Archivo</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Tabla de Destino</label>
+          <select id="tablaDestino" onchange="reiniciarMapeo()" class="w-full p-3 border border-slate-800 rounded-xl text-xs font-bold text-white bg-slate-950 focus:border-blue-500 focus:outline-none transition">
+            <option value="productos">🏷️ Catálogo de Productos y Stock</option>
+            <option value="clientes">👥 Cartera de Clientes</option>
+            <option value="proveedores">🚚 Proveedores</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Selecciona el archivo (.CSV)</label>
+          <input type="file" id="csvFileInput" accept=".csv, text/csv" onchange="analizarCSV(event)" class="w-full p-2 border border-slate-800 rounded-xl text-xs bg-slate-950 text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-500 transition">
+        </div>
+      </div>
+    </div>
+
+    <!-- PASO 2: MAPEO INTELIGENTE DE COLUMNAS -->
+    <div id="stepMapeo" class="bg-slate-900/90 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-4 hidden">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div>
+          <h2 class="text-sm font-extrabold text-white flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-indigo-400"></i> Paso 2: Relación de Columnas
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">El sistema ha auto-detectado las columnas. Ajusta cualquiera si es necesario.</p>
+        </div>
+        <span id="badgeFilasDetectadas" class="bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold px-3 py-1 rounded-full uppercase">0 filas</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-950 text-slate-400 uppercase text-[10px]">
+              <th class="p-3 border-b border-slate-800">Columna en tu CSV</th>
+              <th class="p-3 border-b border-slate-800">Dato de Ejemplo (Fila 1)</th>
+              <th class="p-3 border-b border-slate-800">Campo en el ERP</th>
+            </tr>
+          </thead>
+          <tbody id="tablaMapeoBody" class="divide-y divide-slate-800/60"></tbody>
+        </table>
+      </div>
+
+      <button id="btnConfirmar" onclick="ejecutarImportacion()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2 text-xs uppercase tracking-wider">
+        <i class="fa-solid fa-cloud-arrow-up"></i> Confirmar e Importar Datos
+      </button>
+    </div>
+
+    <!-- RESULTADO DEL PROCESO -->
+    <div id="boxResultado" class="bg-slate-900/90 border border-slate-800 p-6 rounded-3xl shadow-xl space-y-2 hidden">
+      <h3 class="text-xs font-bold text-slate-400 uppercase">Resultado del Proceso</h3>
+      <div id="statusMessage" class="p-4 rounded-xl text-xs font-bold"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let parsedRowsData = [];
+    let csvHeadersFound = [];
+
+    // Diccionario de auto-detección y campos oficiales del ERP
+    const ESQUEMA_ERP = {
+      productos: {
+        campos: [
+          { id: 'nombre', label: '⭐ Nombre del Producto (Principal)' },
+          { id: 'codigo', label: 'Código / Referencia' },
+          { id: 'categoria', label: 'Categoría / Familia' },
+          { id: 'precio_kg', label: 'Precio PVP (€/kg)' },
+          { id: 'kilos_stock', label: 'Kilos Disponibles' },
+          { id: 'cajas_stock', label: 'Cajas Disponibles' },
+          { id: 'stock_minimo', label: 'Stock Mínimo (Alertas)' },
+          { id: 'almacen_origen', label: 'Almacén / Nave de Origen' },
+          { id: 'extra', label: '📦 Guardar como Dato Extra (JSON)' },
+          { id: 'ignorar', label: '🚫 Ignorar columna' }
+        ],
+        sinonimos: {
+          nombre: ['nombre', 'articulo', 'producto', 'denominacion', 'item', 'descripcion'],
+          codigo: ['codigo', 'cod', 'ref', 'referencia', 'sku', 'id'],
+          categoria: ['categoria', 'familia', 'tipo', 'grupo'],
+          precio_kg: ['precio_kg', 'precio', 'pvp', 'tarifa', 'importe', 'coste', 'precio_venta'],
+          kilos_stock: ['kilos_stock', 'kilos', 'stock_kg', 'stock', 'existencias', 'cantidad', 'peso'],
+          cajas_stock: ['cajas_stock', 'cajas', 'bultos', 'paquetes'],
+          stock_minimo: ['stock_minimo', 'minimo', 'alerta_stock'],
+          almacen_origen: ['almacen_origen', 'almacen', 'nave', 'ubicacion']
+        }
+      },
+      clientes: {
+        campos: [
+          { id: 'nombre_comercial', label: '⭐ Nombre Comercial (Principal)' },
+          { id: 'razon_social', label: 'Razón Social' },
+          { id: 'cif', label: 'CIF / NIF / DNI' },
+          { id: 'telefono', label: 'Teléfono' },
+          { id: 'email', label: 'Correo Electrónico' },
+          { id: 'direccion', label: 'Dirección' },
+          { id: 'poblacion', label: 'Población / Ciudad' },
+          { id: 'limite_credito', label: 'Límite de Crédito (€)' },
+          { id: 'dias_pago', label: 'Días de Pago' },
+          { id: 'extra', label: '📦 Guardar como Dato Extra (JSON)' },
+          { id: 'ignorar', label: '🚫 Ignorar columna' }
+        ],
+        sinonimos: {
+          nombre_comercial: ['nombre_comercial', 'nombre', 'cliente', 'empresa', 'comercial'],
+          razon_social: ['razon_social', 'razon', 'fiscal', 'sociedad'],
+          cif: ['cif', 'cif_nif', 'nif', 'dni', 'identificacion', 'vat'],
+          telefono: ['telefono', 'tel', 'tlf', 'movil', 'phone'],
+          email: ['email', 'correo', 'mail', 'contacto'],
+          direccion: ['direccion', 'calle', 'domicilio', 'dir'],
+          poblacion: ['poblacion', 'ciudad', 'municipio', 'localidad'],
+          limite_credito: ['limite_credito', 'credito', 'riesgo', 'limite'],
+          dias_pago: ['dias_pago', 'plazo', 'vencimiento', 'pago']
+        }
+      },
+      proveedores: {
+        campos: [
+          { id: 'nombre', label: '⭐ Nombre del Proveedor' },
+          { id: 'cif', label: 'CIF / NIF' },
+          { id: 'telefono', label: 'Teléfono' },
+          { id: 'email', label: 'Correo Electrónico' },
+          { id: 'direccion', label: 'Dirección' },
+          { id: 'extra', label: '📦 Guardar como Dato Extra (JSON)' },
+          { id: 'ignorar', label: '🚫 Ignorar columna' }
+        ],
+        sinonimos: {
+          nombre: ['nombre', 'proveedor', 'empresa', 'razon_social'],
+          cif: ['cif', 'nif', 'cif_nif'],
+          telefono: ['telefono', 'tel', 'movil'],
+          email: ['email', 'correo', 'mail'],
+          direccion: ['direccion', 'calle', 'domicilio']
+        }
+      }
+    };
+
+    function reiniciarMapeo() {
+      document.getElementById('stepMapeo').classList.add('hidden');
+      document.getElementById('boxResultado').classList.add('hidden');
+      document.getElementById('csvFileInput').value = '';
+      parsedRowsData = [];
+    }
+
+    function analizarCSV(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          if (!results.data || results.data.length === 0) {
+            alert("El archivo CSV está vacío o no se pudo leer correctamente.");
+            return;
+          }
+
+          parsedRowsData = results.data;
+          csvHeadersFound = results.meta.fields || Object.keys(results.data[0]);
+
+          document.getElementById('badgeFilasDetectadas').innerText = `${parsedRowsData.length} registros listos`;
+          renderizarTablaMapeo();
+          document.getElementById('stepMapeo').classList.remove('hidden');
+          document.getElementById('boxResultado').classList.add('hidden');
+        }
+      });
+    }
+
+    function autoDetectarCampo(columnaCsv, tipo) {
+      const colNorm = columnaCsv.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      const esquema = ESQUEMA_ERP[tipo];
+
+      for (const [campoERP, listaSinonimos] of Object.entries(esquema.sinonimos)) {
+        if (listaSinonimos.some(s => colNorm.includes(s) || s.includes(colNorm))) {
+          return campoERP;
+        }
+      }
+      return 'extra';
+    }
+
+    function renderizarTablaMapeo() {
+      const tipo = document.getElementById('tablaDestino').value;
+      const esquema = ESQUEMA_ERP[tipo];
+      const tbody = document.getElementById('tablaMapeoBody');
+      const primerEjemplo = parsedRowsData[0] || {};
+
+      tbody.innerHTML = csvHeadersFound.map((header, idx) => {
+        const ejemploDato = primerEjemplo[header] || '-';
+        const defaultAsignado = autoDetectarCampo(header, tipo);
+
+        const optionsHTML = esquema.campos.map(c => 
+          `<option value="${c.id}" ${c.id === defaultAsignado ? 'selected' : ''}>${c.label}</option>`
+        ).join('');
+
+        return `
+          <tr class="hover:bg-slate-950/40 transition">
+            <td class="p-3 font-bold text-slate-200">${header}</td>
+            <td class="p-3 text-slate-400 font-mono text-[11px] truncate max-w-[180px]">${ejemploDato}</td>
+            <td class="p-3">
+              <select id="map_select_${idx}" data-csv-header="${header}" class="w-full p-2 border border-slate-700 rounded-xl font-bold text-xs bg-slate-950 text-white focus:border-blue-500 focus:outline-none">
+                ${optionsHTML}
+              </select>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function ejecutarImportacion() {
+      const tipo = document.getElementById('tablaDestino').value;
+      const boxRes = document.getElementById('boxResultado');
+      const statusMsg = document.getElementById('statusMessage');
+      const btn = document.getElementById('btnConfirmar');
+      const empresaIdActual = getEmpresaIdActivo();
+
+      if (!empresaIdActual) return alert("No se ha detectado una empresa activa en la sesión.");
+
+      const mapaFinal = {};
+      csvHeadersFound.forEach((header, idx) => {
+        const select = document.getElementById(`map_select_${idx}`);
+        if (select) {
+          mapaFinal[header] = select.value;
+        }
+      });
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando e importando...';
+      boxRes.classList.remove('hidden');
+      statusMsg.className = "p-4 rounded-xl text-xs font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20";
+      statusMsg.innerText = "⏳ Preparando registros y limpiando datos...";
+
+      const registrosAInsertar = [];
+
+      parsedRowsData.forEach(row => {
+        const nuevaFila = { 
+          empresa_id: empresaIdActual,
+          datos_extra: {} 
+        };
+
+        Object.keys(mapaFinal).forEach(csvCol => {
+          const campoBD = mapaFinal[csvCol];
+          let val = row[csvCol];
+
+          if (val !== undefined && val !== null) {
+            val = String(val).trim();
+            if (campoBD === 'ignorar') return;
+
+            if (campoBD === 'extra') {
+              nuevaFila.datos_extra[csvCol] = val;
+            } else if (['precio_kg', 'kilos_stock', 'cajas_stock', 'stock_minimo', 'limite_credito', 'dias_pago'].includes(campoBD)) {
+              const numLimpio = val.replace('€', '').replace(',', '.').trim();
+              nuevaFila[campoBD] = parseFloat(numLimpio) || 0;
+            } else {
+              nuevaFila[campoBD] = val;
+            }
+          }
+        });
+
+        // Garantizar nombres mínimos
+        if (tipo === 'productos' && !nuevaFila.nombre) nuevaFila.nombre = nuevaFila.codigo || 'Producto sin nombre';
+        if (tipo === 'clientes' && !nuevaFila.nombre_comercial) nuevaFila.nombre_comercial = nuevaFila.razon_social || nuevaFila.cif || 'Cliente sin nombre';
+        if (tipo === 'proveedores' && !nuevaFila.nombre) nuevaFila.nombre = nuevaFila.cif || 'Proveedor sin nombre';
+
+        registrosAInsertar.push(nuevaFila);
+      });
+
+      // Deduplicación en el cliente por nombre
+      let filasFinales = registrosAInsertar;
+      if (tipo === 'clientes') {
+        const mapaUnicos = new Map();
+        registrosAInsertar.forEach(item => {
+          const key = (item.nombre_comercial || '').toLowerCase();
+          if (key && !mapaUnicos.has(key)) mapaUnicos.set(key, item);
+        });
+        filasFinales = Array.from(mapaUnicos.values());
+      }
+
+      try {
+        // Inserción en bloques de 100 registros
+        const tamBloque = 100;
+        for (let i = 0; i < filasFinales.length; i += tamBloque) {
+          const bloque = filasFinales.slice(i, i + tamBloque);
+          const { error } = await dbClient.from(tipo).insert(bloque);
+          if (error) throw error;
+        }
+
+        statusMsg.className = "p-4 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+        statusMsg.innerHTML = `<i class="fa-solid fa-circle-check text-base mr-2"></i> ¡Éxito! Se han importado correctamente <b>${filasFinales.length}</b> registros en "${tipo}".`;
+        document.getElementById('stepMapeo').classList.add('hidden');
+        document.getElementById('csvFileInput').value = '';
+
+      } catch (err) {
+        statusMsg.className = "p-4 rounded-xl text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20";
+        statusMsg.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-base mr-2"></i> Error al importar en Supabase: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Confirmar e Importar Datos';
+      }
+    }
+  </script>
+</body>
+</html>
