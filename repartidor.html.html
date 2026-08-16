@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Reparto y Firma Digital - ERP Distribución</title>
+
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; padding: 0 !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <div class="max-w-7xl mx-auto space-y-6 px-4 pt-6">
+
+    <!-- CABECERA Y FILTROS -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4 no-print">
+      <div>
+        <h1 class="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-truck-ramp-box text-blue-600"></i> Control de Entregas y Repartidores
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Gestión in situ de entregas, comparativa Original vs. Entregado [*], fotos y firma táctil.</p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Filtrar por Ruta / Repartidor</label>
+          <select id="filtroRepartidor" onchange="cargarAlbaranesRuta()" class="bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 transition">
+            <option value="TODOS">🚚 Todas las Rutas / Repartidores</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha</label>
+          <input type="date" id="filtroFecha" onchange="cargarAlbaranesRuta()" class="bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 transition">
+        </div>
+      </div>
+    </div>
+
+    <!-- LISTADO DE ALBARANES -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+      <h2 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+        📦 Albaranes Asignados para Entrega Hoy
+      </h2>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left text-slate-600">
+          <thead class="text-[10px] text-slate-500 uppercase bg-slate-100/80 border-b font-bold">
+            <tr>
+              <th class="p-3.5">Nº Albarán</th>
+              <th class="p-3.5">Cliente / Destinatario</th>
+              <th class="p-3.5">Repartidor Asignado</th>
+              <th class="p-3.5 text-center">Bultos / Kilos</th>
+              <th class="p-3.5 text-right">Total (€)</th>
+              <th class="p-3.5 text-center">Estado Entrega</th>
+              <th class="p-3.5 text-center">Acciones / Rectificar / Firmar</th>
+            </tr>
+          </thead>
+          <tbody id="tablaRutaBody" class="divide-y divide-slate-100 font-semibold text-slate-700">
+            <tr><td colspan="7" class="text-center py-8 text-slate-400">Cargando entregas...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL DE RECTIFICACIÓN COMPARATIVA EN RUTA [*] -->
+  <div id="modalRuta" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200">
+      <div class="bg-blue-900 text-white p-4 flex justify-between items-center">
+        <h3 class="font-bold text-sm flex items-center gap-2">
+          <i class="fa-solid fa-code-compare text-amber-400"></i> Rectificar Albarán: Comparativa Original vs. Entregado [*]
+        </h3>
+        <button onclick="cerrarModalRuta()" class="text-slate-300 hover:text-white font-bold text-lg px-2">✕</button>
+      </div>
+
+      <div class="p-6 space-y-5 overflow-y-auto flex-1 text-xs">
+        <input type="hidden" id="editAlbaranId">
+        
+        <!-- CABECERA RESUMEN -->
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase block">Albarán</span>
+            <h4 id="editNumAlbaran" class="font-bold text-blue-900 text-sm font-mono">-</h4>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase block">Cliente</span>
+            <h4 id="editClienteNombre" class="font-bold text-slate-800 text-sm">-</h4>
+          </div>
+        </div>
+
+        <!-- TABLA COMPARATIVA LÍNEAS -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+            <h4 class="font-bold text-slate-700 uppercase text-[10px]">1. Comparativa del Pedido vs. Entrega Real</h4>
+            <span class="text-[10px] text-slate-400">Modifica cajas o kilos entregados para registrar la diferencia</span>
+          </div>
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-xs text-left text-slate-700">
+              <thead class="bg-slate-100 text-slate-600 font-bold border-b text-[10px] uppercase">
+                <tr>
+                  <th class="p-2.5">Producto</th>
+                  <th class="p-2.5 text-center bg-slate-200/60 text-slate-800 font-black">Pedido Original</th>
+                  <th class="p-2.5 text-center bg-blue-50 text-blue-900 font-black">Cajas Reales</th>
+                  <th class="p-2.5 text-center bg-blue-50 text-blue-900 font-black">Kilos Reales</th>
+                  <th class="p-2.5 text-center">Diferencia</th>
+                  <th class="p-2.5 text-right">Precio (€/kg)</th>
+                  <th class="p-2.5 text-right">Subtotal Real</th>
+                </tr>
+              </thead>
+              <tbody id="editLineasBody" class="divide-y divide-slate-100 font-semibold"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- SECCIÓN DEVOLUCIONES EXTRA -->
+        <div class="bg-amber-50/60 p-4 rounded-xl border border-amber-200 space-y-3">
+          <h4 class="font-bold text-amber-900 uppercase text-[10px] flex items-center gap-1.5">
+            <i class="fa-solid fa-rotate-left"></i> 2. Añadir Devolución de Género (De este albarán o de días anteriores)
+          </h4>
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+            <div class="md:col-span-4">
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Producto Devuelto</label>
+              <select id="devProductoSelect" class="w-full bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold">
+                <option value="">-- Seleccionar producto devuelto --</option>
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cajas Dev.</label>
+              <input type="number" id="devCajasInput" min="1" value="1" class="w-full bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold text-center">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kilos Dev.</label>
+              <input type="number" id="devKilosInput" step="0.01" value="0.00" class="w-full bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold text-center">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Destino Género</label>
+              <select id="devDestinoSelect" class="w-full bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold">
+                <option value="REINTEGRAR">♻️ Cámara</option>
+                <option value="MERMA">🗑️ Merma</option>
+              </select>
+            </div>
+            <div class="md:col-span-2">
+              <button type="button" onclick="agregarLineaDevolucion()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded-xl text-xs transition shadow flex items-center justify-center gap-1">
+                <i class="fa-solid fa-plus"></i> Añadir Dev.
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- MOTIVO OBLIGATORIO -->
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">⚠️ Motivo de la Modificación / Incidencia [*]</label>
+          <input type="text" id="motivoIncidenciaInput" placeholder="Ej: Se entregan 2 cajas menos por falta de espacio en cámara / Devolución de género" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-bold focus:bg-white focus:outline-none focus:border-blue-500">
+        </div>
+
+        <!-- FOTOGRAFÍA -->
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">📸 Foto de la Incidencia / Devolución (Opcional)</label>
+          <input type="file" id="fotoIncidenciaInput" accept="image/*" capture="environment" onchange="previsualizarFotoIncidencia(event)" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+          
+          <div id="previewFotoBox" class="hidden mt-3 relative inline-block">
+            <img id="previewFotoImg" src="" alt="Vista previa" class="h-32 rounded-xl border border-slate-300 object-cover shadow-sm">
+            <button type="button" onclick="eliminarFotoIncidencia()" class="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-1 text-xs hover:bg-rose-700">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t flex justify-end gap-3">
+        <button onclick="cerrarModalRuta()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition">Cancelar</button>
+        <button id="btnGuardarCambiosRuta" onclick="guardarCambiosRuta()" class="px-5 py-2.5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow transition flex items-center gap-1.5">
+          <i class="fa-solid fa-floppy-disk"></i> Guardar Cambios [*] y Ajustar Stock
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL VISOR Y FIRMA CON COMPARATIVA -->
+  <div id="modalVisor" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div class="bg-slate-900 text-white p-4 flex justify-between items-center print:hidden">
+        <h3 class="font-bold text-sm flex items-center gap-2">✍️ Vista Previa del Albarán y Firma</h3>
+        <div class="flex items-center gap-3">
+          <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5">
+            <i class="fa-solid fa-print"></i> Imprimir
+          </button>
+          <button onclick="cerrarVisor()" class="text-slate-400 hover:text-white font-bold text-lg px-2">✕</button>
+        </div>
+      </div>
+      <div class="p-8 overflow-y-auto bg-slate-100 flex justify-center flex-1">
+        <div id="hojaImpresion" class="bg-white p-10 rounded-xl shadow border border-slate-200 w-full max-w-[800px] text-slate-800 font-sans">
+          
+          <!-- CABECERA -->
+          <div class="flex justify-between items-start border-b-2 border-blue-900 pb-6 mb-6">
+            <div>
+              <h1 id="vEmpresaNombre" class="text-xl font-extrabold text-blue-900 uppercase">DISTRIBUCIONES CONGELADOS S.L.</h1>
+              <p class="text-xs text-slate-500 mt-1">Venta y Distribución de Pescados y Mariscos Congelados</p>
+            </div>
+            <div class="text-right">
+              <div class="bg-blue-50 px-4 py-2 rounded-lg inline-block border border-blue-100">
+                <span class="text-[10px] font-bold text-blue-700 uppercase tracking-wider">ALBARÁN DE ENTREGA</span>
+                <h2 id="vNumAlbaran" class="text-base font-bold text-blue-900 mt-0.5">ALB-2026-000</h2>
+              </div>
+              <p id="vFecha" class="text-xs font-bold text-slate-700 mt-2">Fecha: --/--/----</p>
+            </div>
+          </div>
+
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 flex justify-between">
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">CLIENTE / DESTINATARIO</span>
+              <h3 id="vCliente" class="text-sm font-bold text-slate-900">-</h3>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">REPARTIDOR / RUTA</span>
+              <h3 id="vRepartidor" class="text-sm font-bold text-blue-900">-</h3>
+            </div>
+          </div>
+
+          <!-- AVISO RECTIFICACIÓN -->
+          <div id="vAvisoModificado" class="hidden mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+            <span class="font-bold block">⚠️ Albarán Rectificado en Ruta [*]:</span>
+            <span id="vMotivoTexto" class="italic">-</span>
+          </div>
+
+          <!-- TABLA DETALLE -->
+          <table class="w-full text-xs text-left text-slate-700 mb-6 border-collapse">
+            <thead>
+              <tr class="bg-slate-100 border-b-2 border-slate-300 text-slate-800 font-bold">
+                <th class="p-2.5">Producto</th>
+                <th class="p-2.5">Lote</th>
+                <th class="p-2.5 text-center">Pedido Orig.</th>
+                <th class="p-2.5 text-center">Entregado</th>
+                <th class="p-2.5 text-right">Precio (€/kg)</th>
+                <th class="p-2.5 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="vTablaBody"></tbody>
+          </table>
+          
+          <!-- FOTO EVIDENCIA -->
+          <div id="vFotoContainer" class="hidden mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+            <p class="text-[10px] font-bold text-slate-500 uppercase mb-2">📸 Evidencia Fotográfica de Entrega / Devolución:</p>
+            <img id="vFotoIncidenciaImg" src="" alt="Foto Incidencia" class="max-h-44 rounded-lg border border-slate-300 shadow-sm">
+          </div>
+
+          <!-- PIE DE FIRMA Y TOTALES -->
+          <div class="flex justify-between items-end border-t-2 border-slate-200 pt-6">
+            <div class="w-1/2 border border-slate-300 rounded-lg p-2 bg-white text-center">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] font-bold text-slate-500 uppercase">Firma del Cliente (Rúbrica)</span>
+                <button type="button" onclick="limpiarFirma()" class="text-[10px] text-red-600 hover:underline font-bold">🗑️ Borrar</button>
+              </div>
+              <canvas id="canvasFirma" class="w-full h-24 border border-dashed border-slate-300 rounded cursor-crosshair bg-slate-50 touch-none"></canvas>
+            </div>
+
+            <div class="w-5/12 bg-slate-50 border border-slate-200 rounded-lg p-4 text-right space-y-1">
+              <p class="text-xs text-slate-600">Total Cajas Entregadas: <strong id="vTotalCajas" class="text-slate-900">0</strong></p>
+              <p class="text-xs text-slate-600">Total Kilos Reales: <strong id="vTotalKilos" class="text-slate-900">0.00 kg</strong></p>
+              <p class="text-sm font-extrabold text-blue-900 border-t border-slate-200 pt-2 mt-2">Total Albarán: <span id="vTotalImporte">0.00 €</span></p>
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4 border-t flex justify-end print:hidden">
+            <button id="btnGuardarFirma" onclick="guardarFirmaYEntregar()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs shadow transition flex items-center gap-2">
+              ✍️ Guardar Firma y Marcar Entregado
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let albaranesCache = [];
+    let productosCatalogo = [];
+    let repartidoresLista = [];
+    let albaranActualIdVisor = null;
+    let sesionUsuario = null;
+    let lineasEditandoActuales = [];
+    let fotoBase64Comprimida = null;
+
+    let canvas, ctx, dibujando = false;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById('filtroFecha').value = new Date().toISOString().split('T')[0];
+      leerSesion();
+      await cargarCatalogos();
+      await cargarRepartidores();
+      await cargarAlbaranesRuta();
+      inicializarCanvasFirma();
+    });
+
+    function leerSesion() {
+      const sesionRaw = localStorage.getItem('erp_usuario_sesion') || localStorage.getItem('usuario_sesion');
+      if (sesionRaw) {
+        try {
+          sesionUsuario = JSON.parse(sesionRaw);
+        } catch(e) {}
+      }
+    }
+
+    async function cargarCatalogos() {
+      const empresaId = getEmpresaIdActivo();
+      let query = db.from('productos').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+      const { data } = await query.order('nombre', { ascending: true });
+      productosCatalogo = data || [];
+
+      const selectDev = document.getElementById('devProductoSelect');
+      selectDev.innerHTML = '<option value="">-- Seleccionar producto devuelto --</option>';
+      productosCatalogo.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.innerText = `${p.nombre || p.nombre_producto} (${p.precio_kg || 0} €/kg)`;
+        selectDev.appendChild(opt);
+      });
+    }
+
+    function inicializarCanvasFirma() {
+      canvas = document.getElementById('canvasFirma');
+      if (!canvas) return;
+      ctx = canvas.getContext('2d');
+
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+
+      canvas.onmousedown = (e) => { dibujando = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); };
+      canvas.onmousemove = (e) => { if (dibujando) { ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); } };
+      canvas.onmouseup = () => { dibujando = false; };
+      canvas.onmouseleave = () => { dibujando = false; };
+
+      canvas.ontouchstart = (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        dibujando = true;
+        ctx.beginPath();
+        ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+      };
+      canvas.ontouchmove = (e) => {
+        e.preventDefault();
+        if (!dibujando) return;
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+        ctx.stroke();
+      };
+      canvas.ontouchend = () => { dibujando = false; };
+    }
+
+    function limpiarFirma() {
+      if (ctx && canvas) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    function previsualizarFotoIncidencia(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const c = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          const MAX_WIDTH = 700;
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+
+          c.width = width;
+          c.height = height;
+          const context = c.getContext('2d');
+          context.drawImage(img, 0, 0, width, height);
+
+          fotoBase64Comprimida = c.toDataURL('image/jpeg', 0.6);
+
+          document.getElementById('previewFotoImg').src = fotoBase64Comprimida;
+          document.getElementById('previewFotoBox').classList.remove('hidden');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function eliminarFotoIncidencia() {
+      fotoBase64Comprimida = null;
+      document.getElementById('fotoIncidenciaInput').value = '';
+      document.getElementById('previewFotoBox').classList.add('hidden');
+    }
+
+    async function cargarRepartidores() {
+      const empresaId = getEmpresaIdActivo();
+      const rolActual = (sesionUsuario?.rol || 'ADMIN').toUpperCase();
+      const esAdmin = (rolActual === 'ADMIN' || rolActual === 'SUPERADMIN');
+
+      let query = db.from('usuarios').select('id, nombre, rol, email, activo');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data: usuarios } = await query.order('nombre', { ascending: true });
+      repartidoresLista = (usuarios || []).filter(u => ['REPARTIDOR', 'COMERCIAL', 'ADMIN'].includes((u.rol || '').toUpperCase()) && u.activo !== false);
+
+      const selectRep = document.getElementById('filtroRepartidor');
+
+      if (!esAdmin) {
+        const miNombre = sesionUsuario?.nombre || sesionUsuario?.email;
+        selectRep.innerHTML = `<option value="${miNombre}" selected>👤 Mis Entregas (${miNombre})</option>`;
+        selectRep.disabled = true;
+        return;
+      }
+
+      selectRep.innerHTML = '<option value="TODOS">🚚 Todas las Rutas / Repartidores</option>';
+      repartidoresLista.forEach(r => {
+        const nom = r.nombre || r.email;
+        const opt = document.createElement('option');
+        opt.value = nom;
+        opt.innerText = `${nom} (${(r.rol || 'REPARTIDOR').toUpperCase()})`;
+        selectRep.appendChild(opt);
+      });
+    }
+
+    async function cargarAlbaranesRuta() {
+      const empresaId = getEmpresaIdActivo();
+      const fechaSel = document.getElementById('filtroFecha').value;
+      const selectRep = document.getElementById('filtroRepartidor');
+      const repSel = selectRep ? selectRep.value : 'TODOS';
+
+      const rolActual = (sesionUsuario?.rol || 'ADMIN').toUpperCase();
+      const esAdmin = (rolActual === 'ADMIN' || rolActual === 'SUPERADMIN');
+
+      let qAlb = db.from('albaranes').select('*');
+      if (empresaId) qAlb = qAlb.eq('empresa_id', empresaId);
+      if (fechaSel) qAlb = qAlb.or(`fecha.eq.${fechaSel},fecha_salida.eq.${fechaSel}`);
+
+      const { data: albaranes } = await qAlb;
+      if (!albaranes) {
+        renderizarTablaRuta([]);
+        return;
+      }
+
+      albaranesCache = albaranes.filter(a => {
+        if (esAdmin) {
+          return repSel === 'TODOS' || a.repartidor === repSel;
+        } else {
+          const miNombre = (sesionUsuario?.nombre || '').trim().toLowerCase();
+          const miEmail = (sesionUsuario?.email || '').trim().toLowerCase();
+          const rep = (a.repartidor || '').trim().toLowerCase();
+          const creador = (a.creado_por || '').trim().toLowerCase();
+          return (rep === miNombre || rep === miEmail || creador === miNombre || creador === miEmail);
+        }
+      });
+
+      renderizarTablaRuta(albaranesCache);
+    }
+
+    function renderizarTablaRuta(lista) {
+      const tbody = document.getElementById('tablaRutaBody');
+      tbody.innerHTML = '';
+
+      if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">No hay entregas asignadas para esta fecha.</td></tr>';
+        return;
+      }
+
+      const rolActual = (sesionUsuario?.rol || 'ADMIN').toUpperCase();
+      const esAdmin = (rolActual === 'ADMIN' || rolActual === 'SUPERADMIN');
+
+      lista.forEach(a => {
+        const isEntregado = (a.estado || '').toLowerCase() === 'entregado';
+        const isModificado = a.modificado_en_ruta === true;
+        const numAlb = a.numero_albaran || 'ALB-000';
+        const cajas = a.total_cajas || 0;
+        const kilos = parseFloat(a.total_kilos || 0);
+        const euros = parseFloat(a.total_importe || 0);
+
+        let selectorRepartidorHTML = '';
+        if (esAdmin) {
+          let options = `<option value="Sin Asignar" ${a.repartidor === 'Sin Asignar' ? 'selected' : ''}>-- Sin Asignar --</option>`;
+          repartidoresLista.forEach(r => {
+            const nom = r.nombre || r.email;
+            const sel = (a.repartidor === nom) ? 'selected' : '';
+            options += `<option value="${nom}" ${sel}>${nom}</option>`;
+          });
+          selectorRepartidorHTML = `<select onchange="cambiarRepartidorAlbaran('${a.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:outline-none">${options}</select>`;
+        } else {
+          selectorRepartidorHTML = `<span class="text-xs font-bold text-slate-700">${a.repartidor || 'Sin Asignar'}</span>`;
+        }
+
+        let badgeEstado = isEntregado 
+          ? `<span class="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-black uppercase">✅ Entregado</span>`
+          : `<span class="px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-black uppercase">⏳ Pendiente</span>`;
+
+        if (isModificado) {
+          badgeEstado += `<span class="ml-1 px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[9px] font-bold" title="${a.motivo_modificacion || ''}">[*] Rectificado</span>`;
+        }
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-blue-50/40 transition">
+            <td class="p-3.5 font-mono font-bold text-blue-700">
+              ${numAlb} ${isModificado ? '<span class="text-amber-500 font-black">[*]</span>' : ''}
+            </td>
+            <td class="p-3.5 font-bold text-slate-900">${a.cliente_nombre || 'Cliente'}</td>
+            <td class="p-3.5">${selectorRepartidorHTML}</td>
+            <td class="p-3.5 text-center font-bold text-slate-700">${cajas} caj. / ${kilos.toFixed(2)} kg</td>
+            <td class="p-3.5 text-right font-extrabold text-emerald-600 font-mono">${euros.toFixed(2)} €</td>
+            <td class="p-3.5 text-center">${badgeEstado}</td>
+            <td class="p-3.5 text-center space-x-1.5">
+              <button onclick="abrirModalRuta('${a.id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold rounded-lg text-xs transition shadow-sm" title="Rectificar cajas, kilos o devoluciones">
+                ✏️ Modificar [*]
+              </button>
+              <button onclick="verAlbaranModal('${a.id}')" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg text-xs transition shadow">
+                ✍️ Firmar
+              </button>
+            </td>
+          </tr>`;
+      });
+    }
+
+    async function cambiarRepartidorAlbaran(albaranId, nuevoRepartidor) {
+      const { error } = await db.from('albaranes').update({ repartidor: nuevoRepartidor }).eq('id', albaranId);
+      if (error) alert("⚠️ Error al asignar repartidor: " + error.message);
+    }
+
+    // --- MODAL DE RECTIFICACIÓN Y COMPARATIVA EN RUTA ---
+    async function abrirModalRuta(albaranId) {
+      const alb = albaranesCache.find(a => String(a.id) === String(albaranId));
+      if (!alb) return;
+
+      document.getElementById('editAlbaranId').value = alb.id;
+      document.getElementById('editNumAlbaran').innerText = alb.numero_albaran || 'ALB-000';
+      document.getElementById('editClienteNombre').innerText = alb.cliente_nombre || 'Cliente';
+      document.getElementById('motivoIncidenciaInput').value = alb.motivo_modificacion || '';
+      
+      fotoBase64Comprimida = alb.foto_incidencia || null;
+      if (fotoBase64Comprimida) {
+        document.getElementById('previewFotoImg').src = fotoBase64Comprimida;
+        document.getElementById('previewFotoBox').classList.remove('hidden');
+      } else {
+        document.getElementById('previewFotoBox').classList.add('hidden');
+      }
+
+      const empresaId = getEmpresaIdActivo();
+      let qLin = db.from('lineas_albaran').select('*');
+      if (empresaId) qLin = qLin.eq('empresa_id', empresaId);
+      const { data: lineas } = await qLin.eq('albaran_id', alb.id);
+
+      lineasEditandoActuales = (lineas || []).map(l => {
+        // Asegurar que cajas_original y kilos_original se lean de las columnas permanentes
+        const cjOriginal = (l.cajas_original !== null && l.cajas_original !== undefined) ? Number(l.cajas_original) : Number(l.cajas || 0);
+        const kgOriginal = (l.kilos_original !== null && l.kilos_original !== undefined) ? parseFloat(l.kilos_original) : parseFloat(l.kilos || 0);
+
+        return {
+          id: l.id,
+          producto_id: l.producto_id,
+          producto_nombre: l.producto_nombre || l.nombre || 'Producto',
+          lote: l.lote || 'LOT-GENERAL',
+          cajas_original: cjOriginal,
+          kilos_original: kgOriginal,
+          cajas: Number(l.cajas || 0),
+          kilos: parseFloat(l.kilos || 0),
+          precio_kg: parseFloat(l.precio_kg || l.precio_unidad || l.precio || 0),
+          subtotal: parseFloat(l.subtotal || 0),
+          es_devolucion: Number(l.cajas) < 0 || parseFloat(l.kilos) < 0,
+          origen_cajas: Number(l.cajas || 0),
+          origen_kilos: parseFloat(l.kilos || 0)
+        };
+      });
+
+      renderizarLineasEdicion();
+      document.getElementById('modalRuta').classList.remove('hidden');
+      document.getElementById('modalRuta').classList.add('flex');
+    }
+
+    function renderizarLineasEdicion() {
+      const tbody = document.getElementById('editLineasBody');
+      tbody.innerHTML = '';
+
+      if (lineasEditandoActuales.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Sin líneas en este albarán.</td></tr>';
+        return;
+      }
+
+      lineasEditandoActuales.forEach((l, idx) => {
+        const subtotalCalc = (l.kilos * l.precio_kg);
+        l.subtotal = subtotalCalc;
+
+        const diffCajas = l.cajas - l.cajas_original;
+        const diffKilos = l.kilos - l.kilos_original;
+
+        let diffBadge = `<span class="text-slate-400 font-normal">Sin cambio</span>`;
+        if (diffCajas !== 0 || Math.abs(diffKilos) > 0.05) {
+          const signoC = diffCajas > 0 ? `+${diffCajas}` : `${diffCajas}`;
+          const signoK = diffKilos > 0 ? `+${diffKilos.toFixed(2)}` : `${diffKilos.toFixed(2)}`;
+          const color = (diffCajas < 0 || diffKilos < 0) ? 'text-rose-600 bg-rose-50 border-rose-200' : 'text-emerald-700 bg-emerald-50 border-emerald-200';
+          diffBadge = `<span class="px-2 py-0.5 rounded border text-[10px] font-bold ${color}">${signoC} caj. / ${signoK} kg</span>`;
+        }
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50 transition border-b border-slate-100 ${l.es_devolucion ? 'bg-amber-50/40 text-amber-900' : ''}">
+            <td class="p-2.5 font-bold">
+              ${l.es_devolucion ? '<span class="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-black mr-1">DEV</span>' : ''}
+              ${l.producto_nombre}
+            </td>
+            <td class="p-2.5 text-center bg-slate-100/70 font-mono font-black text-slate-600">
+              ${l.cajas_original} caj. / ${l.kilos_original.toFixed(2)} kg
+            </td>
+            <td class="p-2.5 text-center bg-blue-50/30">
+              <input type="number" step="1" value="${l.cajas}" oninput="actualizarLineaEditada(${idx}, 'cajas', this.value)" class="w-16 bg-white border border-blue-300 rounded-lg p-1 text-center font-black text-xs text-blue-900">
+            </td>
+            <td class="p-2.5 text-center bg-blue-50/30">
+              <input type="number" step="0.01" value="${l.kilos.toFixed(2)}" oninput="actualizarLineaEditada(${idx}, 'kilos', this.value)" class="w-20 bg-white border border-blue-300 rounded-lg p-1 text-center font-mono font-black text-xs text-blue-900">
+            </td>
+            <td class="p-2.5 text-center font-mono">
+              ${diffBadge}
+            </td>
+            <td class="p-2.5 text-right font-mono text-slate-600">${l.precio_kg.toFixed(2)} €</td>
+            <td class="p-2.5 text-right font-mono font-black ${l.subtotal < 0 ? 'text-rose-600' : 'text-slate-900'}">${l.subtotal.toFixed(2)} €</td>
+            <td class="p-2.5 text-center">
+              <button type="button" onclick="eliminarLineaEditando(${idx})" class="text-rose-500 hover:text-rose-700 font-bold p-1">✕</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    function actualizarLineaEditada(idx, campo, valor) {
+      const valNum = parseFloat(valor) || 0;
+      lineasEditandoActuales[idx][campo] = valNum;
+      
+      if (campo === 'cajas' && !lineasEditandoActuales[idx].es_devolucion) {
+        const prod = productosCatalogo.find(p => String(p.id) === String(lineasEditandoActuales[idx].producto_id));
+        if (prod) {
+          const pesoCaja = prod.peso_caja_kg || 10;
+          lineasEditandoActuales[idx].kilos = Math.abs(valNum) * pesoCaja;
+        }
+      }
+
+      renderizarLineasEdicion();
+    }
+
+    function eliminarLineaEditando(idx) {
+      lineasEditandoActuales.splice(idx, 1);
+      renderizarLineasEdicion();
+    }
+
+    function agregarLineaDevolucion() {
+      const prodId = document.getElementById('devProductoSelect').value;
+      const cajas = Number(document.getElementById('devCajasInput').value) || 0;
+      const kilos = parseFloat(document.getElementById('devKilosInput').value) || 0;
+      const destino = document.getElementById('devDestinoSelect').value;
+
+      if (!prodId) {
+        alert("⚠️ Selecciona el producto devuelto.");
+        return;
+      }
+      if (cajas <= 0 && kilos <= 0) {
+        alert("⚠️ Indica las cajas o kilos devueltos.");
+        return;
+      }
+
+      const prod = productosCatalogo.find(p => String(p.id) === String(prodId));
+      const precio = parseFloat(prod?.precio_kg || 0);
+
+      lineasEditandoActuales.push({
+        id: null,
+        producto_id: prod.id,
+        producto_nombre: `${prod.nombre} (Devolución: ${destino})`,
+        lote: 'DEV-RUTA',
+        cajas_original: 0,
+        kilos_original: 0,
+        cajas: -Math.abs(cajas),
+        kilos: -Math.abs(kilos > 0 ? kilos : (cajas * (prod.peso_caja_kg || 10))),
+        precio_kg: precio,
+        subtotal: 0,
+        es_devolucion: true,
+        destino_devolucion: destino,
+        origen_cajas: 0,
+        origen_kilos: 0
+      });
+
+      document.getElementById('devProductoSelect').value = '';
+      document.getElementById('devCajasInput').value = '1';
+      document.getElementById('devKilosInput').value = '0.00';
+      
+      renderizarLineasEdicion();
+    }
+
+    async function guardarCambiosRuta() {
+      const albaranId = document.getElementById('editAlbaranId').value;
+      const motivo = document.getElementById('motivoIncidenciaInput').value.trim();
+      const btn = document.getElementById('btnGuardarCambiosRuta');
+
+      if (!motivo) {
+        alert("⚠️ Es obligatorio escribir el motivo de la rectificación [*].");
+        document.getElementById('motivoIncidenciaInput').focus();
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Guardando cambios y stock...';
+
+      try {
+        const empresaId = getEmpresaIdActivo();
+        const alb = albaranesCache.find(a => String(a.id) === String(albaranId));
+        
+        let nuevoTotalCajas = 0;
+        let nuevoTotalKilos = 0;
+        let nuevoTotalImporte = 0;
+
+        for (const l of lineasEditandoActuales) {
+          const subtotal = l.kilos * l.precio_kg;
+          nuevoTotalCajas += l.cajas;
+          nuevoTotalKilos += l.kilos;
+          nuevoTotalImporte += subtotal;
+
+          if (l.id) {
+            // Actualizar línea existente manteniendo congelados los originales
+            const payloadUpdate = {
+              cajas: l.cajas,
+              kilos: l.kilos,
+              cajas_original: l.cajas_original,
+              kilos_original: l.kilos_original,
+              subtotal: subtotal
+            };
+
+            await db.from('lineas_albaran').update(payloadUpdate).eq('id', l.id);
+
+            // Ajuste de stock
+            const diffKilos = l.origen_kilos - l.kilos;
+            const diffCajas = l.origen_cajas - l.cajas;
+
+            if (diffKilos !== 0 || diffCajas !== 0) {
+              const { data: pData } = await db.from('productos').select('*').eq('id', l.producto_id).maybeSingle();
+              if (pData) {
+                await db.from('productos').update({
+                  cajas_stock: Math.max(0, Number(pData.cajas_stock || 0) + diffCajas),
+                  kilos_stock: Math.max(0, parseFloat(pData.kilos_stock || 0) + diffKilos)
+                }).eq('id', l.producto_id);
+              }
+            }
+          } else {
+            // Nueva línea de devolución
+            const payloadNueva = {
+              empresa_id: empresaId,
+              albaran_id: albaranId,
+              numero_albaran: alb.numero_albaran,
+              producto_id: l.producto_id,
+              producto_nombre: l.producto_nombre,
+              lote: l.lote,
+              cajas_original: 0,
+              kilos_original: 0,
+              cajas: l.cajas,
+              kilos: l.kilos,
+              precio_kg: l.precio_kg,
+              subtotal: subtotal
+            };
+            await db.from('lineas_albaran').insert([payloadNueva]);
+
+            if (l.destino_devolucion === 'REINTEGRAR') {
+              const { data: pData } = await db.from('productos').select('*').eq('id', l.producto_id).maybeSingle();
+              if (pData) {
+                await db.from('productos').update({
+                  cajas_stock: Number(pData.cajas_stock || 0) + Math.abs(l.cajas),
+                  kilos_stock: parseFloat(pData.kilos_stock || 0) + Math.abs(l.kilos)
+                }).eq('id', l.producto_id);
+              }
+            }
+          }
+        }
+
+        // Actualizar Cabecera de Albarán
+        const payloadAlbaran = {
+          total_cajas: nuevoTotalCajas,
+          total_kilos: nuevoTotalKilos,
+          total_importe: nuevoTotalImporte,
+          modificado_en_ruta: true,
+          motivo_modificacion: motivo,
+          estado: 'modificado'
+        };
+        if (fotoBase64Comprimida) {
+          payloadAlbaran.foto_incidencia = fotoBase64Comprimida;
+        }
+
+        let { error: errAlb } = await db.from('albaranes').update(payloadAlbaran).eq('id', albaranId);
+        
+        if (errAlb) {
+          delete payloadAlbaran.foto_incidencia;
+          await db.from('albaranes').update(payloadAlbaran).eq('id', albaranId);
+        }
+
+        alert("✅ ¡Albarán rectificado y stock sincronizado correctamente [*]!");
+        cerrarModalRuta();
+        await cargarAlbaranesRuta();
+
+      } catch (err) {
+        alert("Error al guardar rectificación: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar Cambios [*] y Ajustar Stock';
+      }
+    }
+
+    function cerrarModalRuta() {
+      document.getElementById('modalRuta').classList.add('hidden');
+      document.getElementById('modalRuta').classList.remove('flex');
+    }
+
+    // --- MODAL DE VISOR Y FIRMA CON DETALLE ORIGINAL VS ENTREGADO ---
+    async function verAlbaranModal(albaranId) {
+      albaranActualIdVisor = albaranId;
+      const alb = albaranesCache.find(a => String(a.id) === String(albaranId));
+      if (!alb) return;
+
+      const sesionRaw = localStorage.getItem('erp_usuario_sesion') || localStorage.getItem('usuario_sesion');
+      let empNombre = 'DISTRIBUCIONES CONGELADOS S.L.';
+      if (sesionRaw) {
+        try {
+          const ses = JSON.parse(sesionRaw);
+          if (ses.empresa_nombre) empNombre = ses.empresa_nombre;
+        } catch(e) {}
+      }
+
+      document.getElementById('vEmpresaNombre').innerText = empNombre;
+      document.getElementById('vNumAlbaran').innerText = (alb.numero_albaran || 'ALB-000') + (alb.modificado_en_ruta ? ' [*]' : '');
+      document.getElementById('vFecha').innerText = 'Fecha: ' + (alb.fecha_salida || alb.fecha || '');
+      document.getElementById('vCliente').innerText = alb.cliente_nombre || 'Cliente';
+      document.getElementById('vRepartidor').innerText = alb.repartidor || 'Sin Asignar';
+      document.getElementById('vTotalCajas').innerText = alb.total_cajas || 0;
+      document.getElementById('vTotalKilos').innerText = parseFloat(alb.total_kilos || 0).toFixed(2) + ' kg';
+      document.getElementById('vTotalImporte').innerText = parseFloat(alb.total_importe || 0).toFixed(2) + ' €';
+
+      const avisoBox = document.getElementById('vAvisoModificado');
+      if (alb.modificado_en_ruta) {
+        document.getElementById('vMotivoTexto').innerText = alb.motivo_modificacion || 'Modificación in situ en destino';
+        avisoBox.classList.remove('hidden');
+      } else {
+        avisoBox.classList.add('hidden');
+      }
+
+      const fotoBox = document.getElementById('vFotoContainer');
+      const fotoImg = document.getElementById('vFotoIncidenciaImg');
+      if (alb.foto_incidencia) {
+        fotoImg.src = alb.foto_incidencia;
+        fotoBox.classList.remove('hidden');
+      } else {
+        fotoBox.classList.add('hidden');
+      }
+
+      const empresaId = getEmpresaIdActivo();
+      let qLin = db.from('lineas_albaran').select('*');
+      if (empresaId) qLin = qLin.eq('empresa_id', empresaId);
+      const { data: lineas } = await qLin.eq('albaran_id', alb.id);
+
+      const tbody = document.getElementById('vTablaBody');
+      tbody.innerHTML = '';
+
+      if (lineas && lineas.length > 0) {
+        lineas.forEach(l => {
+          const cjEntregadas = Number(l.cajas || 0);
+          const kgEntregados = parseFloat(l.kilos || 0);
+          const cjOrig = (l.cajas_original !== null && l.cajas_original !== undefined) ? Number(l.cajas_original) : cjEntregadas;
+          const kgOrig = (l.kilos_original !== null && l.kilos_original !== undefined) ? parseFloat(l.kilos_original) : kgEntregados;
+
+          let originalTexto = `${cjOrig} c. / ${kgOrig.toFixed(2)} kg`;
+          if (cjOrig === cjEntregadas && Math.abs(kgOrig - kgEntregados) < 0.05) {
+            originalTexto = `<span class="text-slate-400 font-normal">Sin cambio</span>`;
+          }
+
+          tbody.innerHTML += `
+            <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+              <td class="p-2.5 font-bold text-slate-900">${l.producto_nombre || l.nombre || 'Producto'}</td>
+              <td class="p-2.5 font-mono text-slate-500 text-[11px]">${l.lote || 'LOT-GENERAL'}</td>
+              <td class="p-2.5 text-center font-mono text-slate-500 bg-slate-50">${originalTexto}</td>
+              <td class="p-2.5 text-center font-black text-blue-900">${cjEntregadas} c. / ${kgEntregados.toFixed(2)} kg</td>
+              <td class="p-2.5 text-right font-mono text-slate-700">${parseFloat(l.precio_kg || 0).toFixed(2)} €</td>
+              <td class="p-2.5 text-right font-black font-mono ${parseFloat(l.subtotal || 0) < 0 ? 'text-rose-600' : 'text-blue-700'}">${parseFloat(l.subtotal || 0).toFixed(2)} €</td>
+            </tr>`;
+        });
+      }
+
+      limpiarFirma();
+      document.getElementById('modalVisor').classList.remove('hidden');
+      document.getElementById('modalVisor').classList.add('flex');
+      setTimeout(inicializarCanvasFirma, 200);
+    }
+
+    async function guardarFirmaYEntregar() {
+      if (!albaranActualIdVisor) return;
+
+      const btn = document.getElementById('btnGuardarFirma');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Guardando...';
+
+      let firmaDataUrl = null;
+      if (canvas) {
+        try {
+          firmaDataUrl = canvas.toDataURL('image/png');
+        } catch(e) {}
+      }
+
+      const payload = { estado: 'entregado' };
+      if (firmaDataUrl && firmaDataUrl.length > 100) {
+        payload.firma_cliente = firmaDataUrl;
+      }
+
+      let { error } = await db.from('albaranes').update(payload).eq('id', albaranActualIdVisor);
+
+      if (error && error.message.includes('firma_cliente')) {
+        const resFallback = await db.from('albaranes').update({ estado: 'entregado' }).eq('id', albaranActualIdVisor);
+        error = resFallback.error;
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '✍️ Guardar Firma y Marcar Entregado';
+
+      if (error) {
+        alert("⚠️ Error al registrar la entrega: " + error.message);
+      } else {
+        alert("✅ ¡Entrega firmada y registrada con éxito!");
+        cerrarVisor();
+        await cargarAlbaranesRuta();
+      }
+    }
+
+    function cerrarVisor() { 
+      document.getElementById('modalVisor').classList.add('hidden'); 
+      document.getElementById('modalVisor').classList.remove('flex');
+    }
+  </script>
+</body>
+</html>
