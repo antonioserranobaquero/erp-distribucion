@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tesorería y Flujo de Caja - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <div class="max-w-7xl mx-auto space-y-6 px-4 pt-6">
+
+    <!-- CABECERA -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-vault text-blue-600"></i> Balance de Tesorería y Beneficio Neto
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Análisis financiero en tiempo real: ingresos por facturación y albaranes vs. compras y gastos operativos.</p>
+      </div>
+
+      <button onclick="cargarDatosTesoreria()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition border border-slate-200 flex items-center gap-1.5 shadow-sm">
+        <i class="fa-solid fa-arrows-rotate"></i> Actualizar Datos
+      </button>
+    </div>
+
+    <!-- TARJETAS PRINCIPALES DE TESORERÍA -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <!-- INGRESOS TOTALES -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ingresos Totales (Ventas)</span>
+          <div class="p-2 bg-emerald-50 text-emerald-600 rounded-xl text-sm"><i class="fa-solid fa-arrow-trend-up"></i></div>
+        </div>
+        <div>
+          <h2 id="cardIngresosTotales" class="text-2xl font-black text-emerald-600 font-mono">0.00 €</h2>
+          <p class="text-[10px] text-slate-400 mt-0.5">Facturas emitidas y albaranes</p>
+        </div>
+      </div>
+
+      <!-- GASTOS Y COMPRAS -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gastos y Compras</span>
+          <div class="p-2 bg-rose-50 text-rose-600 rounded-xl text-sm"><i class="fa-solid fa-arrow-trend-down"></i></div>
+        </div>
+        <div>
+          <h2 id="cardGastosTotales" class="text-2xl font-black text-rose-600 font-mono">0.00 €</h2>
+          <p class="text-[10px] text-slate-400 mt-0.5">Proveedores, combustible, suministros</p>
+        </div>
+      </div>
+
+      <!-- BENEFICIO NETO -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Beneficio Neto Estimado</span>
+          <div class="p-2 bg-blue-50 text-blue-600 rounded-xl text-sm"><i class="fa-solid fa-scale-balanced"></i></div>
+        </div>
+        <div>
+          <h2 id="cardBeneficioNeto" class="text-2xl font-black text-blue-700 font-mono">0.00 €</h2>
+          <p class="text-[10px] text-slate-400 mt-0.5">Margen real (Ingresos - Gastos)</p>
+        </div>
+      </div>
+
+      <!-- COBROS PENDIENTES -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cobros Pendientes Clientes</span>
+          <div class="p-2 bg-amber-50 text-amber-600 rounded-xl text-sm"><i class="fa-solid fa-clock-rotate-left"></i></div>
+        </div>
+        <div>
+          <h2 id="cardCobrosPendientes" class="text-2xl font-black text-amber-600 font-mono">0.00 €</h2>
+          <p class="text-[10px] text-slate-400 mt-0.5">Facturas y albaranes no cobrados</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TABLAS DE MOVIMIENTOS RECIENTES -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- ÚLTIMAS VENTAS / COBROS -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <div class="flex justify-between items-center border-b pb-3">
+          <h2 class="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+            <i class="fa-solid fa-file-invoice text-emerald-600"></i> Últimas Ventas / Facturación
+          </h2>
+          <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full uppercase">Entradas</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left text-slate-600">
+            <thead class="bg-slate-100/80 text-[10px] text-slate-500 uppercase border-b font-bold">
+              <tr>
+                <th class="p-3">Documento</th>
+                <th class="p-3">Cliente</th>
+                <th class="p-3">Fecha</th>
+                <th class="p-3 text-right">Importe</th>
+              </tr>
+            </thead>
+            <tbody id="tablaVentasBody" class="divide-y divide-slate-100 font-semibold text-slate-700">
+              <tr><td colspan="4" class="p-6 text-center text-slate-400">Cargando ventas...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ÚLTIMOS GASTOS / COMPRAS -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <div class="flex justify-between items-center border-b pb-3">
+          <h2 class="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+            <i class="fa-solid fa-cart-arrow-down text-rose-600"></i> Últimos Gastos y Compras
+          </h2>
+          <span class="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full uppercase">Salidas</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left text-slate-600">
+            <thead class="bg-slate-100/80 text-[10px] text-slate-500 uppercase border-b font-bold">
+              <tr>
+                <th class="p-3">Concepto / Proveedor</th>
+                <th class="p-3">Tipo</th>
+                <th class="p-3">Fecha</th>
+                <th class="p-3 text-right">Importe</th>
+              </tr>
+            </thead>
+            <tbody id="tablaGastosBody" class="divide-y divide-slate-100 font-semibold text-slate-700">
+              <tr><td colspan="4" class="p-6 text-center text-slate-400">Cargando gastos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    document.addEventListener('DOMContentLoaded', cargarDatosTesoreria);
+
+    async function cargarDatosTesoreria() {
+      const empresaId = getEmpresaIdActivo();
+
+      // 1. Consultar Facturas
+      let qFac = dbClient.from('facturas').select('*');
+      if (empresaId) qFac = qFac.eq('empresa_id', empresaId);
+      const { data: facturas } = await qFac;
+
+      // 2. Consultar Albaranes
+      let qAlb = dbClient.from('albaranes').select('*');
+      if (empresaId) qAlb = qAlb.eq('empresa_id', empresaId);
+      const { data: albaranes } = await qAlb;
+
+      // 3. Consultar Gastos
+      let qGas = dbClient.from('gastos').select('*');
+      if (empresaId) qGas = qGas.eq('empresa_id', empresaId);
+      const { data: gastos } = await qGas;
+
+      // 4. Consultar Compras de mercancía
+      let qCom = dbClient.from('compras').select('*');
+      if (empresaId) qCom = qCom.eq('empresa_id', empresaId);
+      const { data: compras } = await qCom;
+
+      // CÁLCULO DE INGRESOS
+      let totalIngresos = 0;
+      let cobrosPendientes = 0;
+      const ventasLista = [];
+
+      const listaFacturas = facturas || [];
+      const listaAlbaranes = albaranes || [];
+
+      if (listaFacturas.length > 0) {
+        listaFacturas.forEach(f => {
+          const imp = parseFloat(f.total_importe || f.total_factura || f.total || 0);
+          totalIngresos += imp;
+
+          const esCobrada = (f.estado_cobro === 'cobrada' || f.cobrado === true);
+          if (!esCobrada && imp > 0) {
+            cobrosPendientes += imp;
+          }
+
+          ventasLista.push({
+            documento: f.numero_factura || 'FAC-000',
+            cliente: f.cliente_nombre || 'Cliente',
+            fecha: (f.fecha || f.fecha_emision || '2026-01-01').split('T')[0],
+            importe: imp,
+            tipo: 'Factura'
+          });
+        });
+      } else {
+        // Si aún no se han generado facturas, tomar los albaranes directamente
+        listaAlbaranes.forEach(a => {
+          const imp = parseFloat(a.total_importe || a.total || 0);
+          totalIngresos += imp;
+          
+          const esEntregado = (a.estado || '').toLowerCase() === 'entregado';
+          if (!esEntregado && imp > 0) {
+            cobrosPendientes += imp;
+          }
+
+          ventasLista.push({
+            documento: a.numero_albaran || 'ALB-000',
+            cliente: a.cliente_nombre || 'Cliente',
+            fecha: (a.fecha_salida || a.fecha || '2026-01-01').split('T')[0],
+            importe: imp,
+            tipo: 'Albarán'
+          });
+        });
+      }
+
+      // CÁLCULO DE GASTOS Y COMPRAS
+      let totalGastos = 0;
+      const gastosLista = [];
+
+      (gastos || []).forEach(g => {
+        const imp = parseFloat(g.importe || g.total || 0);
+        totalGastos += imp;
+        gastosLista.push({
+          concepto: g.concepto || g.descripcion || 'Gasto operativo',
+          tipo: g.categoria || 'Gasto General',
+          fecha: (g.fecha || '2026-01-01').split('T')[0],
+          importe: imp
+        });
+      });
+
+      (compras || []).forEach(c => {
+        const imp = parseFloat(c.total_importe || c.total || c.importe || 0);
+        totalGastos += imp;
+        gastosLista.push({
+          concepto: c.proveedor_nombre || c.proveedor || 'Compra Proveedor',
+          tipo: 'Compra Mercancía',
+          fecha: (c.fecha || '2026-01-01').split('T')[0],
+          importe: imp
+        });
+      });
+
+      // CÁLCULO BENEFICIO NETO
+      const beneficioNeto = totalIngresos - totalGastos;
+
+      // ACTUALIZAR CARDS
+      document.getElementById('cardIngresosTotales').innerText = `${totalIngresos.toFixed(2)} €`;
+      document.getElementById('cardGastosTotales').innerText = `${totalGastos.toFixed(2)} €`;
+      
+      const beneficioEl = document.getElementById('cardBeneficioNeto');
+      beneficioEl.innerText = `${beneficioNeto.toFixed(2)} €`;
+      if (beneficioNeto < 0) {
+        beneficioEl.className = 'text-2xl font-black text-rose-600 font-mono';
+      } else {
+        beneficioEl.className = 'text-2xl font-black text-blue-700 font-mono';
+      }
+
+      document.getElementById('cardCobrosPendientes').innerText = `${cobrosPendientes.toFixed(2)} €`;
+
+      // RENDERIZAR TABLA DE VENTAS RECIENTES
+      ventasLista.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      const tbodyVentas = document.getElementById('tablaVentasBody');
+      
+      if (ventasLista.length === 0) {
+        tbodyVentas.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-slate-400">Sin ventas registradas en esta empresa.</td></tr>';
+      } else {
+        tbodyVentas.innerHTML = ventasLista.slice(0, 10).map(v => `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-mono font-bold text-blue-700">${v.documento}</td>
+            <td class="p-3 font-bold text-slate-900">${v.cliente}</td>
+            <td class="p-3 text-slate-500 font-mono text-[11px]">${v.fecha}</td>
+            <td class="p-3 text-right font-black font-mono text-emerald-600">${v.importe.toFixed(2)} €</td>
+          </tr>
+        `).join('');
+      }
+
+      // RENDERIZAR TABLA DE GASTOS RECIENTES
+      gastosLista.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      const tbodyGastos = document.getElementById('tablaGastosBody');
+
+      if (gastosLista.length === 0) {
+        tbodyGastos.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-slate-400">Sin gastos ni compras registradas en esta empresa.</td></tr>';
+      } else {
+        tbodyGastos.innerHTML = gastosLista.slice(0, 10).map(g => `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-bold text-slate-900">${g.concepto}</td>
+            <td class="p-3"><span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">${g.tipo}</span></td>
+            <td class="p-3 text-slate-500 font-mono text-[11px]">${g.fecha}</td>
+            <td class="p-3 text-right font-black font-mono text-rose-600">${g.importe.toFixed(2)} €</td>
+          </tr>
+        `).join('');
+      }
+    }
+  </script>
+</body>
+</html>
