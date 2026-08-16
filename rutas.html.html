@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rutas de Reparto - ERP Distribución</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+    
+    .dragging {
+      opacity: 0.4;
+      background-color: #e0f2fe !important;
+      border: 2px dashed #0284c7 !important;
+    }
+
+    .drag-handle { cursor: grab; touch-action: none; }
+    .drag-handle:active { cursor: grabbing; }
+
+    @media print {
+      .no-print { display: none !important; }
+      body { background-color: #ffffff; padding: 0; }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <div class="max-w-6xl mx-auto space-y-6 px-4 pt-6">
+
+    <!-- FILTRO DE FECHA Y REPARTIDOR -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between no-print">
+      <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Repartidor / Ruta:</label>
+          <select id="filtroRepartidorRuta" onchange="cargarRutaDelDia()" class="p-2.5 border border-slate-300 rounded-xl text-xs bg-slate-50 font-bold text-slate-800 focus:outline-none focus:border-blue-500 transition">
+            <option value="TODOS">🚚 Todas las Rutas</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha Reparto:</label>
+          <input type="date" id="fechaRuta" onchange="cargarRutaDelDia()" class="p-2.5 border border-slate-300 rounded-xl text-xs bg-slate-50 font-bold text-slate-800 focus:outline-none focus:border-blue-500 transition">
+        </div>
+
+        <button onclick="cargarTodosLosAlbaranes()" class="mt-4 md:mt-5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">
+          Ver Todos
+        </button>
+      </div>
+
+      <div class="text-right">
+        <span id="contadorEntregas" class="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-3.5 py-1.5 rounded-full font-bold">0 Paradas</span>
+      </div>
+    </div>
+
+    <!-- TARJETAS DE CARGA -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3 bg-blue-50 text-blue-600 rounded-xl text-xl"><i class="fa-solid fa-truck-front"></i></div>
+        <div>
+          <p class="text-[10px] text-slate-400 font-bold uppercase">Entregas Programadas</p>
+          <h3 id="cardClientesRuta" class="text-xl font-black text-slate-800">0</h3>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl text-xl"><i class="fa-solid fa-boxes-packing"></i></div>
+        <div>
+          <p class="text-[10px] text-slate-400 font-bold uppercase">Cajas en Camión</p>
+          <h3 id="cardCajasRuta" class="text-xl font-black text-indigo-600">0 Cajas</h3>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl text-xl"><i class="fa-solid fa-weight-hanging"></i></div>
+        <div>
+          <p class="text-[10px] text-slate-400 font-bold uppercase">Kilos Carga Total</p>
+          <h3 id="cardKilosRuta" class="text-xl font-black text-emerald-600">0.00 kg</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLA REORDENABLE -->
+    <div id="seccionHojaRuta" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+      <div class="flex justify-between items-center border-b pb-4">
+        <div>
+          <h2 class="text-lg font-black text-slate-900">HOJA DE RUTA Y CARGA DE REPARTO</h2>
+          <p class="text-[10px] text-slate-500 uppercase">Control de Transporte y Entregas Frigoríficas</p>
+        </div>
+        <div class="text-right">
+          <p class="text-xs font-bold text-slate-800" id="printFechaRuta">Fecha: --/--/----</p>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-700 border-collapse">
+          <thead>
+            <tr class="bg-slate-100/80 text-[10px] text-slate-600 uppercase border-b font-bold">
+              <th class="p-3 text-center no-print">Mover</th>
+              <th class="p-3 text-center">Nº</th>
+              <th class="p-3">Nº Albarán</th>
+              <th class="p-3">Cliente / Razón Social</th>
+              <th class="p-3">Dirección de Entrega</th>
+              <th class="p-3 text-center">Cajas</th>
+              <th class="p-3 text-right">Kilos</th>
+              <th class="p-3 text-right">Importe (€)</th>
+              <th class="p-3 text-center border-l no-print">Entregado</th>
+            </tr>
+          </thead>
+          <tbody id="tablaRuta" class="divide-y divide-slate-100 font-semibold">
+            <tr><td colspan="9" class="p-6 text-center text-slate-400">Cargando entregas programadas...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="border-t pt-4 flex justify-between items-center text-xs text-slate-500">
+        <p>💡 <i>Arrastra el icono <i class="fa-solid fa-bars"></i> para reordenar las paradas al instante.</i></p>
+        <div class="border border-dashed border-slate-300 p-3 rounded-xl text-center min-w-[200px]">
+          <p class="font-bold text-slate-700 uppercase text-[10px]">Firma Repartidor</p>
+          <div class="h-8"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let albaranesDia = [];
+    let clientesMap = {};
+    let lineasMap = {};
+    let sesionUsuario = null;
+
+    window.onload = async () => {
+      document.getElementById('fechaRuta').value = new Date().toISOString().split('T')[0];
+      leerSesion();
+      await cargarRepartidoresCombo();
+      await cargarRutaDelDia();
+    };
+
+    function leerSesion() {
+      const sesionRaw = localStorage.getItem('erp_usuario_sesion') || localStorage.getItem('usuario_sesion');
+      if (sesionRaw) {
+        try {
+          sesionUsuario = JSON.parse(sesionRaw);
+        } catch(e) {}
+      }
+    }
+
+    async function cargarRepartidoresCombo() {
+      const empresaId = getEmpresaIdActivo();
+      const rolActual = (sesionUsuario?.rol || 'ADMIN').toUpperCase();
+      const esAdmin = (rolActual === 'ADMIN' || rolActual === 'SUPERADMIN');
+
+      let query = dbClient.from('usuarios').select('id, nombre, rol, email, activo');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data: usuarios } = await query.order('nombre', { ascending: true });
+      const select = document.getElementById('filtroRepartidorRuta');
+
+      if (!esAdmin) {
+        const miNombre = sesionUsuario?.nombre || sesionUsuario?.email;
+        select.innerHTML = `<option value="${miNombre}" selected>👤 Mi Ruta (${miNombre})</option>`;
+        select.disabled = true;
+        return;
+      }
+
+      select.innerHTML = '<option value="TODOS">🚚 Todas las Rutas</option>';
+      if (usuarios) {
+        usuarios
+          .filter(u => ['REPARTIDOR', 'COMERCIAL', 'ADMIN'].includes((u.rol || '').toUpperCase()) && u.activo !== false)
+          .forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.nombre || u.email;
+            opt.innerText = `${u.nombre || u.email} (${(u.rol || 'REPARTIDOR').toUpperCase()})`;
+            select.appendChild(opt);
+          });
+      }
+    }
+
+    async function cargarRutaDelDia() {
+      const empresaId = getEmpresaIdActivo();
+      const fecha = document.getElementById('fechaRuta').value;
+      const selectRep = document.getElementById('filtroRepartidorRuta');
+      const repSel = selectRep ? selectRep.value : 'TODOS';
+
+      const rolActual = (sesionUsuario?.rol || 'ADMIN').toUpperCase();
+      const esAdmin = (rolActual === 'ADMIN' || rolActual === 'SUPERADMIN');
+
+      document.getElementById('printFechaRuta').innerText = `Fecha: ${fecha.split('-').reverse().join('/')}`;
+
+      let query = dbClient.from('albaranes').select('*').eq('fecha_salida', fecha);
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      if (esAdmin) {
+        if (repSel !== 'TODOS') query = query.eq('repartidor', repSel);
+      } else {
+        const miNombre = (sesionUsuario?.nombre || '').trim();
+        const miEmail = (sesionUsuario?.email || '').trim();
+        query = query.or(`repartidor.eq.${miNombre},creado_por.eq.${miNombre},repartidor.eq.${miEmail},creado_por.eq.${miEmail}`);
+      }
+
+      let { data: albaranes } = await query;
+      albaranesDia = albaranes || [];
+
+      let qCli = dbClient.from('clientes').select('*');
+      if (empresaId) qCli = qCli.eq('empresa_id', empresaId);
+      const { data: clientes } = await qCli;
+      clientesMap = {};
+      (clientes || []).forEach(c => clientesMap[c.id] = c);
+
+      const idsAlbaranes = albaranesDia.map(a => a.id);
+      if (idsAlbaranes.length > 0) {
+        let qLin = dbClient.from('lineas_albaran').select('*').in('albaran_id', idsAlbaranes);
+        if (empresaId) qLin = qLin.eq('empresa_id', empresaId);
+        const { data: lineas } = await qLin;
+        lineasMap = {};
+        (lineas || []).forEach(l => {
+          if (!lineasMap[l.albaran_id]) lineasMap[l.albaran_id] = [];
+          lineasMap[l.albaran_id].push(l);
+        });
+      }
+
+      actualizarResumenRuta(albaranesDia);
+      renderizarTablaRuta(albaranesDia);
+    }
+
+    async function cargarTodosLosAlbaranes() {
+      const empresaId = getEmpresaIdActivo();
+      let query = dbClient.from('albaranes').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const rolActual = (sesionUsuario?.rol || 'ADMIN').toUpperCase();
+      if (rolActual !== 'ADMIN' && rolActual !== 'SUPERADMIN') {
+        const miNombre = (sesionUsuario?.nombre || '').trim();
+        const miEmail = (sesionUsuario?.email || '').trim();
+        query = query.or(`repartidor.eq.${miNombre},creado_por.eq.${miNombre},repartidor.eq.${miEmail},creado_por.eq.${miEmail}`);
+      }
+
+      const { data: albaranes } = await query.order('created_at', { ascending: false });
+      albaranesDia = albaranes || [];
+
+      let qCli = dbClient.from('clientes').select('*');
+      if (empresaId) qCli = qCli.eq('empresa_id', empresaId);
+      const { data: clientes } = await qCli;
+      clientesMap = {};
+      (clientes || []).forEach(c => clientesMap[c.id] = c);
+
+      actualizarResumenRuta(albaranesDia);
+      renderizarTablaRuta(albaranesDia);
+    }
+
+    function renderizarTablaRuta(lista) {
+      const tbody = document.getElementById('tablaRuta');
+      document.getElementById('contadorEntregas').innerText = `${lista.length} Paradas`;
+
+      if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-slate-400">No hay entregas programadas para este filtro.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = lista.map((a, index) => {
+        const clienteObj = clientesMap[a.cliente_id];
+        const clienteNom = clienteObj ? (clienteObj.nombre_comercial || clienteObj.nombre) : (a.cliente_nombre || 'Cliente');
+        const direccion = clienteObj ? (clienteObj.direccion || 'Sin dirección') : 'Sin dirección';
+        const numAlb = a.numero_albaran || 'ALB-000';
+        const cajas = a.total_cajas || 0;
+        const kilos = parseFloat(a.total_kilos || 0);
+        const euros = parseFloat(a.total_importe || a.total || 0);
+
+        return `
+          <tr draggable="true" data-index="${index}" class="fila-reordenable hover:bg-slate-50 transition">
+            <td class="p-3 text-center no-print drag-handle text-slate-400 hover:text-slate-800">
+              <i class="fa-solid fa-bars text-base"></i>
+            </td>
+            <td class="p-3 text-center font-black text-slate-900 bg-slate-50 num-parada">${index + 1}</td>
+            <td class="p-3 font-mono font-bold text-blue-600">${numAlb}</td>
+            <td class="p-3 font-bold text-slate-900">${clienteNom}</td>
+            <td class="p-3 text-xs text-slate-600">${direccion}</td>
+            <td class="p-3 text-center font-bold text-indigo-600">${cajas}</td>
+            <td class="p-3 text-right font-bold text-slate-800">${kilos.toFixed(2)} kg</td>
+            <td class="p-3 text-right font-bold text-slate-900">${euros.toFixed(2)} €</td>
+            <td class="p-3 text-center border-l no-print">
+              <input type="checkbox" ${a.estado === 'entregado' ? 'checked' : ''} onchange="marcarEntregadoRuta('${a.id}', this.checked)" class="w-4 h-4 text-emerald-600 rounded cursor-pointer">
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      activarDragAndDrop();
+    }
+
+    async function marcarEntregadoRuta(id, entregado) {
+      await dbClient.from('albaranes').update({ estado: entregado ? 'entregado' : 'pendiente' }).eq('id', id);
+    }
+
+    function activarDragAndDrop() {
+      const tbody = document.getElementById('tablaRuta');
+      const filas = tbody.querySelectorAll('.fila-reordenable');
+      let dragSource = null;
+
+      filas.forEach(row => {
+        row.addEventListener('dragstart', function(e) {
+          dragSource = this;
+          e.dataTransfer.effectAllowed = 'move';
+          this.classList.add('dragging');
+        });
+
+        row.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          return false;
+        });
+
+        row.addEventListener('drop', function(e) {
+          e.stopPropagation();
+          if (dragSource !== this) {
+            const fromIndex = parseInt(dragSource.getAttribute('data-index'));
+            const toIndex = parseInt(this.getAttribute('data-index'));
+
+            const movedItem = albaranesDia.splice(fromIndex, 1)[0];
+            albaranesDia.splice(toIndex, 0, movedItem);
+
+            renderizarTablaRuta(albaranesDia);
+          }
+          return false;
+        });
+
+        row.addEventListener('dragend', function() {
+          this.classList.remove('dragging');
+        });
+      });
+    }
+
+    function actualizarResumenRuta(lista) {
+      const totalClientes = lista.length;
+      let totalCajas = lista.reduce((sum, a) => sum + (Number(a.total_cajas) || 0), 0);
+      let totalKilos = lista.reduce((sum, a) => sum + (parseFloat(a.total_kilos) || 0), 0);
+
+      document.getElementById('cardClientesRuta').innerText = totalClientes;
+      document.getElementById('cardCajasRuta').innerText = `${totalCajas} Cajas`;
+      document.getElementById('cardKilosRuta').innerText = `${totalKilos.toFixed(2)} kg`;
+    }
+  </script>
+</body>
+</html>
