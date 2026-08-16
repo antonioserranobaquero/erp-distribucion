@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuración de Empresa y Logotipo - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <div class="max-w-4xl mx-auto space-y-6 px-4 pt-6">
+
+    <!-- CABECERA -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
+      <div>
+        <h1 class="text-xl font-black text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-building-gear text-blue-600"></i> Identidad Corporativa y Logotipo
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Configura el logo, datos fiscales y numeración que aparecerán en el ERP, albaranes y facturas.</p>
+      </div>
+      <span class="px-3 py-1 bg-blue-50 text-blue-700 font-bold text-xs rounded-full border border-blue-200">
+        Empresa Activa
+      </span>
+    </div>
+
+    <!-- FORMULARIO DE CONFIGURACIÓN -->
+    <form id="formConfig" onsubmit="guardarConfiguracion(event)" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+      
+      <!-- GESTIÓN DE LOGOTIPO -->
+      <div>
+        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Logotipo de la Empresa</label>
+        <div class="flex flex-col sm:flex-row items-center gap-6 p-4 border border-dashed border-slate-300 rounded-2xl bg-slate-50/70">
+          <div id="previewLogoContainer" class="w-36 h-24 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-2 overflow-hidden shadow-sm shrink-0">
+            <img id="previewLogoImg" src="" alt="Logo" class="max-h-full max-w-full object-contain hidden">
+            <span id="noLogoText" class="text-[10px] font-bold text-slate-400 uppercase text-center">Sin Logo Subido</span>
+          </div>
+
+          <div class="space-y-2 flex-1 w-full">
+            <input type="file" id="logoFileInput" accept="image/*" onchange="procesarLogo(event)" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+            <div class="flex items-center justify-between">
+              <p class="text-[10px] text-slate-400">Recomendado: PNG o JPG con fondo transparente o blanco.</p>
+              <button type="button" onclick="eliminarLogo()" class="text-[10px] font-bold text-rose-600 hover:underline">Quitar Logo</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DATOS FISCALES -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Comercial de la Empresa *</label>
+          <input type="text" id="cfgNombre" required placeholder="Ej: Mariscos del Sur S.L." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">CIF / NIF</label>
+          <input type="text" id="cfgCif" placeholder="Ej: B-12345678" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Dirección Fiscal / Sede</label>
+          <input type="text" id="cfgDireccion" placeholder="Ej: Calle Puerto 14, Polígono Industrial" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Teléfono de Contacto</label>
+          <input type="text" id="cfgTelefono" placeholder="Ej: 952 00 00 00" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+      </div>
+
+      <!-- CONTADORES DE SERIES -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Último Número de Albarán</label>
+          <input type="number" id="cfgUltimoAlbaran" value="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Último Número de Factura</label>
+          <input type="number" id="cfgUltimaFactura" value="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+      </div>
+
+      <div class="pt-4 border-t flex justify-end">
+        <button type="submit" id="btnGuardar" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider shadow transition flex items-center gap-2">
+          <i class="fa-solid fa-floppy-disk"></i> Guardar Configuración
+        </button>
+      </div>
+    </form>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let logoBase64 = null;
+
+    document.addEventListener('DOMContentLoaded', cargarDatosEmpresa);
+
+    function procesarLogo(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const c = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          const MAX_WIDTH = 400;
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+
+          c.width = width;
+          c.height = height;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          logoBase64 = c.toDataURL('image/png', 0.85);
+          mostrarLogoPreview(logoBase64);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function mostrarLogoPreview(src) {
+      const img = document.getElementById('previewLogoImg');
+      const noTxt = document.getElementById('noLogoText');
+      if (src) {
+        img.src = src;
+        img.classList.remove('hidden');
+        noTxt.classList.add('hidden');
+      } else {
+        img.classList.add('hidden');
+        noTxt.classList.remove('hidden');
+      }
+    }
+
+    function eliminarLogo() {
+      logoBase64 = '';
+      document.getElementById('logoFileInput').value = '';
+      mostrarLogoPreview(null);
+    }
+
+    async function cargarDatosEmpresa() {
+      const empresaId = getEmpresaIdActivo();
+      const { data: emp, error } = await dbClient.from('empresas').select('*').eq('id', empresaId).maybeSingle();
+
+      if (emp) {
+        document.getElementById('cfgNombre').value = emp.nombre_comercial || emp.nombre || '';
+        document.getElementById('cfgCif').value = emp.cif || emp.cif_nif || '';
+        document.getElementById('cfgDireccion').value = emp.direccion || '';
+        document.getElementById('cfgTelefono').value = emp.telefono || '';
+        document.getElementById('cfgUltimoAlbaran').value = emp.ultimo_albaran || 0;
+        document.getElementById('cfgUltimaFactura').value = emp.ultima_factura || 0;
+
+        logoBase64 = emp.logo_url || null;
+        if (logoBase64) {
+          mostrarLogoPreview(logoBase64);
+        }
+      }
+    }
+
+    async function guardarConfiguracion(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnGuardar');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Guardando...';
+
+      const empresaId = getEmpresaIdActivo();
+      const nombre = document.getElementById('cfgNombre').value.trim();
+      const cif = document.getElementById('cfgCif').value.trim();
+      const direccion = document.getElementById('cfgDireccion').value.trim();
+      const telefono = document.getElementById('cfgTelefono').value.trim();
+      const ultimoAlbaran = parseInt(document.getElementById('cfgUltimoAlbaran').value) || 0;
+      const ultimaFactura = parseInt(document.getElementById('cfgUltimaFactura').value) || 0;
+
+      const payload = {
+        nombre: nombre,
+        nombre_comercial: nombre,
+        cif: cif,
+        cif_nif: cif,
+        direccion: direccion,
+        telefono: telefono,
+        ultimo_albaran: ultimoAlbaran,
+        ultima_factura: ultimaFactura
+      };
+
+      if (logoBase64 !== null) {
+        payload.logo_url = logoBase64;
+      }
+
+      let error = null;
+      if (empresaId) {
+        const res = await dbClient.from('empresas').update(payload).eq('id', empresaId);
+        error = res.error;
+      } else {
+        const res = await dbClient.from('empresas').insert([payload]);
+        error = res.error;
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar Configuración';
+
+      if (error) {
+        alert("❌ Error al guardar configuración: " + error.message);
+      } else {
+        const sesionRaw = localStorage.getItem('erp_usuario_sesion') || localStorage.getItem('usuario_sesion');
+        if (sesionRaw) {
+          try {
+            const ses = JSON.parse(sesionRaw);
+            ses.empresa_nombre = nombre;
+            ses.empresa_logo = logoBase64;
+            const updated = JSON.stringify(ses);
+            localStorage.setItem('erp_usuario_sesion', updated);
+            localStorage.setItem('usuario_sesion', updated);
+          } catch(err) {}
+        }
+        alert("✅ ¡Configuración y Logotipo corporativo actualizados con éxito!");
+        location.reload();
+      }
+    }
+  </script>
+</body>
+</html>
