@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Usuarios y Permisos - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="max-w-7xl mx-auto space-y-6 px-4 pt-6">
+
+    <!-- CABECERA -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <div>
+        <h1 class="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-users-gear text-blue-600"></i> Gestor Granular de Usuarios y Permisos
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Configura los accesos por puesto para administradores, comerciales, repartidores y almacén.</p>
+      </div>
+
+      <button id="btnAltaUsuario" onclick="abrirModalUsuario()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl shadow transition flex items-center gap-2 text-xs uppercase tracking-wider">
+        <i class="fa-solid fa-user-plus"></i> Dar de Alta Nuevo Usuario
+      </button>
+    </div>
+
+    <!-- TABLA DE USUARIOS Y PERMISOS -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-100/80 text-slate-500 uppercase text-[10px] font-bold border-b border-slate-200">
+            <tr>
+              <th class="p-3.5">Nombre / Empleado</th>
+              <th class="p-3.5">Email de Acceso</th>
+              <th class="p-3.5">Rol Asignado</th>
+              <th class="p-3.5 text-center">Ver Costes / Márgenes</th>
+              <th class="p-3.5 text-center">Modificar Precios en Ruta</th>
+              <th class="p-3.5 text-center">Acceso Facturación</th>
+              <th class="p-3.5 text-center">Estado</th>
+              <th class="p-3.5 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaUsuariosBody" class="divide-y divide-slate-100 font-semibold text-slate-700">
+            <tr><td colspan="8" class="p-6 text-center text-slate-400">Cargando lista de usuarios...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL CREAR / EDITAR USUARIO -->
+  <div id="modalUsuario" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden space-y-4 p-6 border border-slate-200">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 id="modalUsuarioTitulo" class="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-id-card text-blue-600"></i> Alta de Usuario
+        </h3>
+        <button onclick="cerrarModalUsuario()" class="text-slate-400 hover:text-slate-600 font-black">✕</button>
+      </div>
+
+      <input type="hidden" id="usrId">
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Completo *</label>
+          <input type="text" id="usrNombre" placeholder="Ej: Manuel García" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-slate-800 focus:border-blue-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Correo Electrónico (Login) *</label>
+          <input type="email" id="usrEmail" placeholder="m.garcia@empresa.com" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-slate-800 focus:border-blue-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+            Contraseña de Acceso <span id="lblPasswordOpcional" class="text-slate-400 font-normal">(Opcional en edición)</span> *
+          </label>
+          <div class="relative">
+            <input type="password" id="usrPassword" placeholder="••••••••" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-slate-800 pr-10 focus:border-blue-500 focus:outline-none">
+            <button type="button" onclick="toggleVerPassword()" class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+              👁️
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rol / Puesto *</label>
+          <select id="usrRol" class="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-slate-800 bg-slate-50 focus:border-blue-500 focus:outline-none">
+            <option value="ADMIN">👑 Administrador / Jefe (Acceso Total)</option>
+            <option value="COMERCIAL">💼 Comercial (Ventas y Albaranes)</option>
+            <option value="REPARTIDOR">🚚 Repartidor / Ruta</option>
+            <option value="ALMACEN">📦 Operario de Almacén</option>
+          </select>
+        </div>
+
+        <div class="pt-2 border-t space-y-2">
+          <span class="block text-[10px] font-bold text-slate-400 uppercase">Configuración de Permisos Especiales</span>
+
+          <label class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer font-bold text-slate-700">
+            <span>Ver costes reales y márgenes</span>
+            <input type="checkbox" id="permCostes" class="w-4 h-4 text-blue-600 rounded">
+          </label>
+
+          <label class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer font-bold text-slate-700">
+            <span>Modificar precios/cajas en ruta</span>
+            <input type="checkbox" id="permModificarRuta" class="w-4 h-4 text-blue-600 rounded">
+          </label>
+
+          <label class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer font-bold text-slate-700">
+            <span>Acceso a módulo de Facturación / Tesorería</span>
+            <input type="checkbox" id="permFacturacion" class="w-4 h-4 text-blue-600 rounded">
+          </label>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 border-t pt-3">
+        <button onclick="cerrarModalUsuario()" class="px-4 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-200">Cancelar</button>
+        <button onclick="guardarUsuario()" id="btnGuardarUsuario" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs transition shadow">Guardar Usuario</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT SUPABASE -->
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let usuariosCache = [];
+    let usuarioActualSession = null;
+
+    window.onload = async () => { 
+      identificarUsuarioLogueado();
+      await cargarUsuarios(); 
+    };
+
+    function toggleVerPassword() {
+      const inputPass = document.getElementById('usrPassword');
+      inputPass.type = inputPass.type === 'password' ? 'text' : 'password';
+    }
+
+    function identificarUsuarioLogueado() {
+      const sesionRaw = localStorage.getItem('erp_usuario_sesion') || localStorage.getItem('usuario_sesion');
+      if (sesionRaw) {
+        try {
+          usuarioActualSession = JSON.parse(sesionRaw);
+        } catch(e) {}
+      }
+    }
+
+    async function cargarUsuarios() {
+      const empresaId = getEmpresaIdActivo();
+      const tbody = document.getElementById('tablaUsuariosBody');
+
+      let query = dbClient.from('usuarios').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data: usuarios, error } = await query.order('nombre', { ascending: true });
+
+      if (error) {
+        tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">Error al cargar usuarios de la base de datos.</td></tr>';
+        return;
+      }
+
+      usuariosCache = usuarios || [];
+
+      if (usuariosCache.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">No hay usuarios registrados para esta empresa.</td></tr>';
+        return;
+      }
+
+      const rolActual = (usuarioActualSession?.rol || 'ADMIN').toUpperCase();
+      const esJefeOAdmin = (rolActual === 'ADMIN' || rolActual === 'SUPERADMIN');
+
+      if (!esJefeOAdmin) {
+        document.getElementById('btnAltaUsuario').classList.add('hidden');
+      }
+
+      tbody.innerHTML = usuariosCache.map(u => {
+        const isActivo = u.activo !== false;
+        const esSuPropioUsuario = String(u.email || '').toLowerCase() === String(usuarioActualSession?.email || '').toLowerCase();
+        const puedeEditarEsteRegistro = esJefeOAdmin || esSuPropioUsuario;
+
+        const accionesHtml = puedeEditarEsteRegistro ? `
+          <div class="flex items-center justify-center gap-1">
+            <button onclick="editarUsuario('${u.id}')" title="Editar / Cambiar Clave" class="px-2 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg text-xs font-bold border border-amber-200 transition">✏️</button>
+            ${esJefeOAdmin && u.rol !== 'SUPERADMIN' ? `
+              <button onclick="toggleBloqueoUsuario('${u.id}', ${isActivo})" title="${isActivo ? 'Bloquear' : 'Activar'}" class="px-2 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-xs font-bold border border-slate-300 transition">
+                ${isActivo ? '🔒' : '🔓'}
+              </button>
+              <button onclick="eliminarUsuario('${u.id}', '${u.nombre || u.email}')" title="Borrar" class="px-2 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-xs font-bold border border-rose-200 transition">🗑️</button>
+            ` : ''}
+          </div>
+        ` : `<span class="text-xs text-slate-400 italic">Sin permisos</span>`;
+
+        return `
+          <tr class="hover:bg-blue-50/40 transition">
+            <td class="p-3.5 font-bold text-slate-900 flex items-center gap-2">
+              <div class="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-black text-[11px] border border-slate-200">
+                ${(u.nombre || 'U').charAt(0).toUpperCase()}
+              </div>
+              ${u.nombre || 'Empleado'} ${esSuPropioUsuario ? '<span class="text-[10px] bg-blue-100 text-blue-800 font-black px-1.5 py-0.5 rounded ml-1">(Tú)</span>' : ''}
+            </td>
+            <td class="p-3.5 font-mono text-xs text-slate-600">${u.email || '-'}</td>
+            <td class="p-3.5"><span class="bg-blue-100 text-blue-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border border-blue-200">${u.rol || 'COMERCIAL'}</span></td>
+            <td class="p-3.5 text-center">
+              <input type="checkbox" ${u.permiso_costes ? 'checked' : ''} ${esJefeOAdmin ? '' : 'disabled'} onchange="actualizarPermiso('${u.id}', 'permiso_costes', this.checked)" class="w-4 h-4 text-blue-600 rounded cursor-pointer">
+            </td>
+            <td class="p-3.5 text-center">
+              <input type="checkbox" ${u.permiso_modificar_ruta ? 'checked' : ''} ${esJefeOAdmin ? '' : 'disabled'} onchange="actualizarPermiso('${u.id}', 'permiso_modificar_ruta', this.checked)" class="w-4 h-4 text-blue-600 rounded cursor-pointer">
+            </td>
+            <td class="p-3.5 text-center">
+              <input type="checkbox" ${u.permiso_facturacion ? 'checked' : ''} ${esJefeOAdmin ? '' : 'disabled'} onchange="actualizarPermiso('${u.id}', 'permiso_facturacion', this.checked)" class="w-4 h-4 text-blue-600 rounded cursor-pointer">
+            </td>
+            <td class="p-3.5 text-center">
+              <span class="${isActivo ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'} text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase border">
+                ${isActivo ? 'Activo' : 'Bloqueado'}
+              </span>
+            </td>
+            <td class="p-3.5 text-center">
+              ${accionesHtml}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function abrirModalUsuario() { 
+      document.getElementById('usrId').value = '';
+      document.getElementById('usrNombre').value = '';
+      document.getElementById('usrEmail').value = '';
+      document.getElementById('usrPassword').value = '';
+      document.getElementById('lblPasswordOpcional').innerText = '(Obligatorio para crear)';
+      document.getElementById('modalUsuarioTitulo').innerHTML = '<i class="fa-solid fa-user-plus text-blue-600"></i> Alta de Usuario';
+      document.getElementById('modalUsuario').classList.remove('hidden'); 
+    }
+
+    function cerrarModalUsuario() { document.getElementById('modalUsuario').classList.add('hidden'); }
+
+    function editarUsuario(id) {
+      const u = usuariosCache.find(item => String(item.id) === String(id));
+      if (!u) return;
+
+      document.getElementById('usrId').value = u.id;
+      document.getElementById('usrNombre').value = u.nombre || '';
+      document.getElementById('usrEmail').value = u.email || '';
+      document.getElementById('usrPassword').value = '';
+      document.getElementById('lblPasswordOpcional').innerText = '(Dejar en blanco para no cambiar)';
+      document.getElementById('usrRol').value = u.rol || 'COMERCIAL';
+      document.getElementById('permCostes').checked = !!u.permiso_costes;
+      document.getElementById('permModificarRuta').checked = !!u.permiso_modificar_ruta;
+      document.getElementById('permFacturacion').checked = !!u.permiso_facturacion;
+
+      document.getElementById('modalUsuarioTitulo').innerHTML = '<i class="fa-solid fa-user-pen text-amber-600"></i> Editar Usuario / Clave';
+      document.getElementById('modalUsuario').classList.remove('hidden');
+    }
+
+    async function guardarUsuario() {
+      const id = document.getElementById('usrId').value;
+      const nombre = document.getElementById('usrNombre').value.trim();
+      const email = document.getElementById('usrEmail').value.trim().toLowerCase();
+      const password = document.getElementById('usrPassword').value.trim();
+      const rol = document.getElementById('usrRol').value;
+      const permCostes = document.getElementById('permCostes').checked;
+      const permModRuta = document.getElementById('permModificarRuta').checked;
+      const permFact = document.getElementById('permFacturacion').checked;
+      const empresaIdFinal = getEmpresaIdActivo();
+      const btn = document.getElementById('btnGuardarUsuario');
+
+      if (!nombre || !email) return alert("Por favor, rellena el nombre y el correo electrónico.");
+      if (!id && !password) return alert("Debes asignar una contraseña para el alta del usuario.");
+
+      btn.disabled = true;
+      btn.innerText = "Guardando...";
+
+      const payload = {
+        empresa_id: empresaIdFinal,
+        nombre: nombre,
+        email: email,
+        rol: rol,
+        permiso_costes: permCostes,
+        permiso_modificar_ruta: permModRuta,
+        permiso_facturacion: permFact,
+        activo: true
+      };
+
+      if (password) {
+        payload.password = password;
+      }
+
+      let error;
+      if (id) {
+        const res = await dbClient.from('usuarios').update(payload).eq('id', id);
+        error = res.error;
+      } else {
+        payload.id = crypto.randomUUID();
+        const res = await dbClient.from('usuarios').insert([payload]);
+        error = res.error;
+      }
+
+      btn.disabled = false;
+      btn.innerText = "Guardar Usuario";
+
+      if (error) {
+        alert("Error al guardar usuario: " + error.message);
+      } else {
+        cerrarModalUsuario();
+        await cargarUsuarios();
+      }
+    }
+
+    async function actualizarPermiso(id, campo, valor) {
+      const { error } = await dbClient.from('usuarios').update({ [campo]: valor }).eq('id', id);
+      if (error) alert("Error al actualizar permiso: " + error.message);
+    }
+
+    async function toggleBloqueoUsuario(id, estadoActual) {
+      const { error } = await dbClient.from('usuarios').update({ activo: !estadoActual }).eq('id', id);
+      if (error) alert("Error al cambiar estado: " + error.message);
+      else await cargarUsuarios();
+    }
+
+    async function eliminarUsuario(id, nombre) {
+      if (!confirm(`⚠️ ¿Seguro que deseas borrar al usuario "${nombre}"?`)) return;
+
+      const { error } = await dbClient.from('usuarios').delete().eq('id', id);
+
+      if (error) alert("Error al borrar usuario: " + error.message);
+      else {
+        await cargarUsuarios();
+      }
+    }
+  </script>
+</body>
+</html>
