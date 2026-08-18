@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diseñador e Impresión de Etiquetas - ERP Distribución</title>
+
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+  <!-- Google Fonts para personalización tipográfica -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@700&family=Inter:wght@400;700;900&family=Montserrat:wght@700;900&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+
+    /* ESTILOS DE IMPRESIÓN DINÁMICOS */
+    @media print {
+      body * { visibility: hidden; }
+      .no-print { display: none !important; }
+      #contenedorImpresionReal, #contenedorImpresionReal * { visibility: visible; }
+      #contenedorImpresionReal {
+        position: absolute;
+        left: 0;
+        top: 0;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        background: transparent !important;
+      }
+    }
+  </style>
+  <style id="estiloImpresionDinamico"></style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <div class="max-w-7xl mx-auto space-y-6 px-4 pt-6 no-print">
+
+    <!-- CABECERA -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-tags text-blue-600"></i> Diseñador e Impresión de Etiquetas y Trazabilidad
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Configura el tamaño, fuentes, logotipos, número de copias y el tipo de impresora (térmica de pegatinas o normal A4).</p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+          <label class="text-xs font-bold text-slate-500 uppercase">Nº de Pegatinas:</label>
+          <input type="number" id="numCopiasInput" min="1" max="500" value="1" class="w-16 p-1 text-center font-black text-blue-900 bg-white border border-slate-300 rounded-lg text-sm">
+        </div>
+        <button onclick="lanzarImpresion()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs shadow-lg transition flex items-center gap-2 uppercase tracking-wider">
+          <i class="fa-solid fa-print"></i> Imprimir
+        </button>
+      </div>
+    </div>
+
+    <!-- CUERPO EN 2 COLUMNAS: CONFIGURADOR Y VISTA PREVIA -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- COLUMNA IZQUIERDA: CONTROLES DE PERSONALIZACIÓN -->
+      <div class="lg:col-span-6 space-y-4">
+
+        <!-- 1. DATOS DEL PRODUCTO Y TRAZABILIDAD -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <h2 class="text-xs font-extrabold text-slate-800 uppercase flex items-center gap-2 border-b pb-2">
+            <i class="fa-solid fa-box text-blue-600"></i> 1. Información del Producto y Lote
+          </h2>
+
+          <div class="space-y-3 text-xs">
+            <div class="relative">
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Producto *</label>
+              <input type="text" id="inputBuscarProd" placeholder="🔍 Escribe o selecciona un producto..." oninput="filtrarProductos()" onfocus="filtrarProductos()" autocomplete="off" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+              <div id="dlProds" class="hidden absolute z-50 w-full bg-white border border-slate-300 rounded-xl shadow-xl max-h-52 overflow-y-auto mt-1 divide-y divide-slate-100"></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nº de Lote *</label>
+                <input type="text" id="lblLote" oninput="actualizarVistaEtiqueta()" value="LOT-2026-081" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold text-slate-800">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha Caducidad</label>
+                <input type="date" id="lblCaducidad" onchange="actualizarVistaEtiqueta()" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Peso Neto (kg)</label>
+                <input type="number" step="0.01" id="lblPeso" oninput="actualizarVistaEtiqueta()" value="10.00" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 text-center">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Formato / Presentación</label>
+                <input type="text" id="lblFormato" oninput="actualizarVistaEtiqueta()" value="Caja 1 Ud." class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Registro Sanitario / Leyenda Legal</label>
+              <input type="text" id="lblOrigen" oninput="actualizarVistaEtiqueta()" value="Mantener congelado a -18ºC · Reg. San. 10.12345/MA" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-700">
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. PERSONALIZACIÓN VISUAL Y TIPOGRAFÍA -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <h2 class="text-xs font-extrabold text-slate-800 uppercase flex items-center gap-2 border-b pb-2">
+            <i class="fa-solid fa-palette text-amber-500"></i> 2. Diseño, Logo y Tipografía
+          </h2>
+
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de Fuente</label>
+              <select id="cfgFuente" onchange="aplicarEstilosEtiqueta()" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800">
+                <option value="'Inter', sans-serif">Inter (Moderna y Limpia)</option>
+                <option value="'Roboto Condensed', sans-serif">Roboto Condensed (Compacta)</option>
+                <option value="'Montserrat', sans-serif">Montserrat (Llamativa / Negrita)</option>
+                <option value="'Courier Prime', monospace">Courier (Estilo Industrial / Lote)</option>
+                <option value="Arial, sans-serif">Arial Estándar</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tamaño de Letra</label>
+              <select id="cfgTamanoLetra" onchange="aplicarEstilosEtiqueta()" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800">
+                <option value="compacto">Compacto (Para textos largos)</option>
+                <option value="normal" selected>Normal / Equilibrado</option>
+                <option value="grande">Grande (Máxima Visibilidad)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Mostrar Logotipo</label>
+              <select id="cfgMostrarLogo" onchange="aplicarEstilosEtiqueta()" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800">
+                <option value="si">✅ Sí (Logo Corporativo)</option>
+                <option value="no">❌ No (Solo Texto)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Código de Barras</label>
+              <select id="cfgMostrarBarcode" onchange="aplicarEstilosEtiqueta()" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800">
+                <option value="si">✅ Código de Barras (CODE128)</option>
+                <option value="no">❌ Sin Código</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. CONFIGURACIÓN DE IMPRESORA Y TAMAÑO FÍSICO -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <h2 class="text-xs font-extrabold text-slate-800 uppercase flex items-center gap-2 border-b pb-2">
+            <i class="fa-solid fa-print text-emerald-600"></i> 3. Tipo de Impresora y Dimensiones
+          </h2>
+
+          <div class="space-y-3 text-xs">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Destino de Impresión</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button type="button" id="btnModoTermica" onclick="cambiarModoImpresora('termica')" class="p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 text-blue-900 font-extrabold flex items-center justify-center gap-1.5 transition">
+                  <i class="fa-solid fa-scroll"></i> Impresora Térmica (Rollo)
+                </button>
+                <button type="button" id="btnModoA4" onclick="cambiarModoImpresora('a4')" class="p-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-600 font-bold flex items-center justify-center gap-1.5 transition">
+                  <i class="fa-solid fa-file-lines"></i> Impresora Normal (Folio A4)
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3" id="bloqueMedidasTermica">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Plantilla Rápida</label>
+                <select id="cfgPlantillaMedida" onchange="seleccionarMedidaPreset(this.value)" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800">
+                  <option value="100x50">100 x 50 mm (Estándar)</option>
+                  <option value="100x70">100 x 70 mm (Grande)</option>
+                  <option value="80x50">80 x 50 mm (Mediana)</option>
+                  <option value="custom">Personalizado (mm)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Ancho (mm)</label>
+                <input type="number" id="cfgAnchoMm" oninput="aplicarEstilosEtiqueta()" value="100" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold text-center">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Alto (mm)</label>
+                <input type="number" id="cfgAltoMm" oninput="aplicarEstilosEtiqueta()" value="50" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold text-center">
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- COLUMNA DERECHA: VISTA PREVIA EN VIVO -->
+      <div class="lg:col-span-6 flex flex-col items-center">
+        <div class="bg-slate-200/70 border border-slate-300 rounded-3xl p-6 w-full flex flex-col items-center justify-center min-h-[500px] sticky top-20 shadow-inner">
+          
+          <div class="flex justify-between items-center w-full max-w-[440px] mb-3 px-1">
+            <span class="text-[11px] font-extrabold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+              <i class="fa-solid fa-eye text-blue-600"></i> Vista Previa en Tiempo Real
+            </span>
+            <span id="badgeDimensiones" class="text-[10px] font-black bg-white px-2.5 py-0.5 rounded-full border border-slate-300 text-slate-700 shadow-sm">
+              100 x 50 mm
+            </span>
+          </div>
+
+          <!-- CONTENEDOR FÍSICO DE LA PEGATINA -->
+          <div id="cajaEtiquetaPreview" class="bg-white border-2 border-black rounded shadow-2xl p-3 flex flex-col justify-between text-black transition-all overflow-hidden" style="width: 380px; height: 190px;">
+            
+            <!-- CABECERA DE LA ETIQUETA -->
+            <div class="border-b-2 border-black pb-1 flex justify-between items-start gap-2">
+              <div class="flex items-center gap-2">
+                <img id="prevLogoImg" src="" alt="Logo" class="max-h-7 max-w-[65px] object-contain hidden">
+                <div>
+                  <h3 id="prevEmpresa" class="font-black text-xs uppercase leading-tight tracking-tight">DISTRIBUCIONES CONGELADOS S.L.</h3>
+                  <p id="prevOrigen" class="text-[8px] font-semibold leading-tight text-slate-700">Mantener congelado a -18ºC</p>
+                </div>
+              </div>
+              <span id="prevBadgeCongelado" class="text-[8px] font-black border-2 border-black px-1 py-0.5 rounded uppercase shrink-0">
+                ULTRA CONGELADO
+              </span>
+            </div>
+
+            <!-- CUERPO: NOMBRE DEL PRODUCTO -->
+            <div class="my-auto py-1">
+              <h2 id="prevProducto" class="font-black uppercase leading-tight tracking-tight text-sm">ATÚN ROJO LOMO CONGELADO -60C</h2>
+              <p id="prevFormato" class="text-[9px] font-bold text-slate-700">Caja 1 Ud.</p>
+            </div>
+
+            <!-- BLOQUE DE TRAZABILIDAD: LOTE, CADUCIDAD Y PESO -->
+            <div class="grid grid-cols-3 gap-1 border-t-2 border-b-2 border-black py-1 text-[9px] items-center">
+              <div>
+                <span class="block text-[7px] font-bold uppercase text-slate-600 leading-none">LOTE:</span>
+                <strong id="prevLote" class="font-mono text-[10px] font-bold">LOT-2026-081</strong>
+              </div>
+              <div>
+                <span class="block text-[7px] font-bold uppercase text-slate-600 leading-none">CADUCIDAD:</span>
+                <strong id="prevCaducidad" class="text-[10px] font-bold">--/--/----</strong>
+              </div>
+              <div class="text-right">
+                <span class="block text-[7px] font-bold uppercase text-slate-600 leading-none">PESO NETO:</span>
+                <strong id="prevPeso" class="text-xs font-black">10.00 kg</strong>
+              </div>
+            </div>
+
+            <!-- CÓDIGO DE BARRAS -->
+            <div id="bloqueBarcode" class="flex justify-center items-center pt-1">
+              <svg id="barcodeCanvas" class="h-8 w-full"></svg>
+            </div>
+
+          </div>
+
+          <p class="text-[10px] text-slate-400 mt-4 font-semibold text-center">
+            * El diseño visual cambiará automáticamente de tamaño y fuente según los controles de la izquierda.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CONTENEDOR OCULTO PARA GENERAR TODAS LAS COPIAS AL IMPRIMIR -->
+  <div id="contenedorImpresionReal" class="hidden"></div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let productosLista = [];
+    let modoImpresoraActivo = 'termica'; // 'termica' o 'a4'
+    let empresaLogoUrl = null;
+    let empresaNombreActivo = 'DISTRIBUCIONES CONGELADOS S.L.';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await cargarDatosEmpresa();
+      await cargarProductos();
+      establecerFechaCaducidadDefecto();
+      aplicarEstilosEtiqueta();
+      actualizarVistaEtiqueta();
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#inputBuscarProd') && !e.target.closest('#dlProds')) {
+          document.getElementById('dlProds').classList.add('hidden');
+        }
+      });
+    });
+
+    function establecerFechaCaducidadDefecto() {
+      const hoy = new Date();
+      hoy.setFullYear(hoy.getFullYear() + 2); // 2 años por defecto para ultracongelados
+      document.getElementById('lblCaducidad').value = hoy.toISOString().split('T')[0];
+    }
+
+    async function cargarDatosEmpresa() {
+      const empresaId = getEmpresaIdActivo();
+      if (!empresaId) return;
+
+      const { data } = await dbClient.from('empresas').select('nombre, nombre_comercial, logo_url').eq('id', empresaId).maybeSingle();
+      if (data) {
+        empresaNombreActivo = data.nombre_comercial || data.nombre || empresaNombreActivo;
+        empresaLogoUrl = data.logo_url || localStorage.getItem('empresa_logo_activo') || null;
+        document.getElementById('prevEmpresa').innerText = empresaNombreActivo;
+        if (empresaLogoUrl) {
+          const img = document.getElementById('prevLogoImg');
+          img.src = empresaLogoUrl;
+          img.classList.remove('hidden');
+        }
+      }
+    }
+
+    async function cargarProductos() {
+      const empresaId = getEmpresaIdActivo();
+      let query = dbClient.from('productos').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data } = await query.order('nombre', { ascending: true });
+      productosLista = data || [];
+
+      if (productosLista.length > 0) {
+        seleccionarProductoObjeto(productosLista[0]);
+      }
+    }
+
+    function filtrarProductos() {
+      const q = document.getElementById('inputBuscarProd').value.toLowerCase().trim();
+      const cont = document.getElementById('dlProds');
+      cont.innerHTML = '';
+
+      const filtrados = productosLista.filter(p => (p.nombre || p.nombre_producto || '').toLowerCase().includes(q));
+
+      if (filtrados.length === 0) {
+        cont.innerHTML = '<div class="p-2.5 text-xs text-slate-400 italic">No se encontraron productos</div>';
+      } else {
+        filtrados.forEach(p => {
+          const nombre = p.nombre || p.nombre_producto;
+          const item = document.createElement('div');
+          item.className = 'p-2.5 hover:bg-blue-50 cursor-pointer text-xs font-bold text-slate-800 flex justify-between items-center';
+          item.innerHTML = `<span>${nombre}</span> <span class="text-[10px] text-slate-400">${p.formato || 'Caja'}</span>`;
+          item.onclick = () => seleccionarProductoObjeto(p);
+          cont.appendChild(item);
+        });
+      }
+      cont.classList.remove('hidden');
+    }
+
+    function seleccionarProductoObjeto(prod) {
+      const nombre = prod.nombre || prod.nombre_producto;
+      document.getElementById('inputBuscarProd').value = nombre;
+      document.getElementById('prevProducto').innerText = nombre.toUpperCase();
+      
+      if (prod.peso_caja_kg) document.getElementById('lblPeso').value = prod.peso_caja_kg;
+      if (prod.formato) document.getElementById('lblFormato').value = prod.formato;
+      if (prod.lote) document.getElementById('lblLote').value = prod.lote;
+      if (prod.fecha_caducidad) document.getElementById('lblCaducidad').value = prod.fecha_caducidad.split('T')[0];
+
+      document.getElementById('dlProds').classList.add('hidden');
+      actualizarVistaEtiqueta();
+    }
+
+    function cambiarModoImpresora(modo) {
+      modoImpresoraActivo = modo;
+      const btnTerm = document.getElementById('btnModoTermica');
+      const btnA4 = document.getElementById('btnModoA4');
+      const bloqueMedidas = document.getElementById('bloqueMedidasTermica');
+
+      if (modo === 'termica') {
+        btnTerm.className = 'p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 text-blue-900 font-extrabold flex items-center justify-center gap-1.5 transition';
+        btnA4.className = 'p-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-600 font-bold flex items-center justify-center gap-1.5 transition';
+        bloqueMedidas.classList.remove('hidden');
+      } else {
+        btnA4.className = 'p-2.5 rounded-xl border-2 border-blue-600 bg-blue-50 text-blue-900 font-extrabold flex items-center justify-center gap-1.5 transition';
+        btnTerm.className = 'p-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-600 font-bold flex items-center justify-center gap-1.5 transition';
+        bloqueMedidas.classList.add('hidden');
+      }
+      aplicarEstilosEtiqueta();
+    }
+
+    function seleccionarMedidaPreset(val) {
+      if (val === '100x50') {
+        document.getElementById('cfgAnchoMm').value = 100;
+        document.getElementById('cfgAltoMm').value = 50;
+      } else if (val === '100x70') {
+        document.getElementById('cfgAnchoMm').value = 100;
+        document.getElementById('cfgAltoMm').value = 70;
+      } else if (val === '80x50') {
+        document.getElementById('cfgAnchoMm').value = 80;
+        document.getElementById('cfgAltoMm').value = 50;
+      }
+      aplicarEstilosEtiqueta();
+    }
+
+    function aplicarEstilosEtiqueta() {
+      const fuente = document.getElementById('cfgFuente').value;
+      const escala = document.getElementById('cfgTamanoLetra').value;
+      const mostrarLogo = document.getElementById('cfgMostrarLogo').value === 'si';
+      const mostrarBarcode = document.getElementById('cfgMostrarBarcode').value === 'si';
+      
+      const anchoMm = parseFloat(document.getElementById('cfgAnchoMm').value) || 100;
+      const altoMm = parseFloat(document.getElementById('cfgAltoMm').value) || 50;
+
+      const caja = document.getElementById('cajaEtiquetaPreview');
+      caja.style.fontFamily = fuente;
+
+      // Escala de tamaños
+      const tituloProd = document.getElementById('prevProducto');
+      if (escala === 'compacto') {
+        tituloProd.className = 'font-black uppercase leading-tight tracking-tight text-xs';
+      } else if (escala === 'normal') {
+        tituloProd.className = 'font-black uppercase leading-tight tracking-tight text-sm';
+      } else {
+        tituloProd.className = 'font-black uppercase leading-tight tracking-tight text-base';
+      }
+
+      // Logo
+      const imgLogo = document.getElementById('prevLogoImg');
+      if (mostrarLogo && empresaLogoUrl) {
+        imgLogo.src = empresaLogoUrl;
+        imgLogo.classList.remove('hidden');
+      } else {
+        imgLogo.classList.add('hidden');
+      }
+
+      // Barcode
+      const bloqueBc = document.getElementById('bloqueBarcode');
+      if (mostrarBarcode) {
+        bloqueBc.classList.remove('hidden');
+      } else {
+        bloqueBc.classList.add('hidden');
+      }
+
+      // Dimensiones visuales del contenedor en pantalla (proporcional)
+      const ratio = altoMm / anchoMm;
+      const anchoPx = 380;
+      caja.style.width = `${anchoPx}px`;
+      caja.style.height = `${anchoPx * ratio}px`;
+
+      document.getElementById('badgeDimensiones').innerText = `${anchoMm} x ${altoMm} mm`;
+
+      // Generar regla CSS @page dinámica para impresión
+      const estiloDinamico = document.getElementById('estiloImpresionDinamico');
+      if (modoImpresoraActivo === 'termica') {
+        estiloDinamico.innerHTML = `
+          @media print {
+            @page {
+              size: ${anchoMm}mm ${altoMm}mm;
+              margin: 0;
+            }
+            .etiqueta-print-box {
+              width: ${anchoMm}mm !important;
+              height: ${altoMm}mm !important;
+              page-break-after: always;
+              box-sizing: border-box;
+              padding: 3mm;
+            }
+          }
+        `;
+      } else {
+        estiloDinamico.innerHTML = `
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 10mm;
+            }
+            #contenedorImpresionReal {
+              display: grid !important;
+              grid-template-columns: repeat(2, 1fr) !important;
+              gap: 5mm !important;
+            }
+            .etiqueta-print-box {
+              width: 95mm !important;
+              height: 50mm !important;
+              border: 1px dashed #94a3b8 !important;
+              box-sizing: border-box;
+              padding: 3mm;
+              break-inside: avoid;
+            }
+          }
+        `;
+      }
+    }
+
+    function actualizarVistaEtiqueta() {
+      const lote = document.getElementById('lblLote').value || 'LOT-GENERAL';
+      const cad = document.getElementById('lblCaducidad').value;
+      const peso = document.getElementById('lblPeso').value || '0.00';
+      const formato = document.getElementById('lblFormato').value || 'Caja estándar';
+      const origen = document.getElementById('lblOrigen').value || '';
+
+      document.getElementById('prevLote').innerText = lote;
+      document.getElementById('prevCaducidad').innerText = cad ? cad.split('-').reverse().join('/') : '--/--/----';
+      document.getElementById('prevPeso').innerText = `${parseFloat(peso).toFixed(2)} kg`;
+      document.getElementById('prevFormato').innerText = formato;
+      document.getElementById('prevOrigen').innerText = origen;
+
+      try {
+        JsBarcode("#barcodeCanvas", lote, {
+          format: "CODE128",
+          lineColor: "#000",
+          width: 1.6,
+          height: 28,
+          displayValue: false,
+          margin: 0
+        });
+      } catch (e) {}
+    }
+
+    function lanzarImpresion() {
+      const numCopias = parseInt(document.getElementById('numCopiasInput').value) || 1;
+      const moldeHTML = document.getElementById('cajaEtiquetaPreview').outerHTML;
+      const contenedorReal = document.getElementById('contenedorImpresionReal');
+      contenedorReal.innerHTML = '';
+
+      const anchoMm = parseFloat(document.getElementById('cfgAnchoMm').value) || 100;
+      const altoMm = parseFloat(document.getElementById('cfgAltoMm').value) || 50;
+
+      // Generar N copias en el contenedor de impresión
+      for (let i = 0; i < numCopias; i++) {
+        const div = document.createElement('div');
+        div.className = 'etiqueta-print-box flex flex-col justify-between text-black bg-white';
+        div.style.fontFamily = document.getElementById('cfgFuente').value;
+        if (modoImpresoraActivo === 'termica') {
+          div.style.width = `${anchoMm}mm`;
+          div.style.height = `${altoMm}mm`;
+        }
+        div.innerHTML = moldeHTML;
+        contenedorReal.appendChild(div);
+      }
+
+      window.print();
+    }
+  </script>
+</body>
+</html>
