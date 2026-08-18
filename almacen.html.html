@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Almacenes y Cámaras - ERP Distribución</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <div class="max-w-7xl mx-auto space-y-6 px-4 pt-6">
+
+    <!-- CABECERA -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-warehouse text-blue-600"></i> Gestión Multialmacén y Cámaras Frigoríficas
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Control de existencias por naves, transferencias entre cámaras y alta de ubicaciones.</p>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button onclick="abrirModalTransferencia()" class="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-extrabold rounded-xl text-xs shadow-sm transition flex items-center gap-1.5">
+          <i class="fa-solid fa-right-left"></i> Transferir entre Naves
+        </button>
+        <button onclick="abrirModalNuevoAlmacen()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs shadow transition flex items-center gap-1.5">
+          <i class="fa-solid fa-plus-circle"></i> + Nueva Nave / Cámara
+        </button>
+      </div>
+    </div>
+
+    <!-- TARJETAS RESUMEN DE ALMACENES -->
+    <div id="gridAlmacenesCards" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"></div>
+
+    <!-- TABLA DE PRODUCTOS Y UBICACIONES -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden space-y-4 p-6">
+      <div class="flex flex-col md:flex-row justify-between items-center gap-4 border-b pb-4">
+        <h2 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-boxes-stacked text-blue-600"></i> Desglose de Stock por Ubicación Física
+        </h2>
+
+        <div class="flex flex-wrap gap-3 w-full md:w-auto">
+          <select id="filtroAlmacenSelect" onchange="filtrarTablaStock()" class="bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-bold text-slate-700">
+            <option value="TODOS">🏢 Todas las Naves / Cámaras</option>
+          </select>
+          <input type="text" id="buscarStockInput" oninput="filtrarTablaStock()" placeholder="🔍 Buscar producto..." class="bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-bold w-full md:w-60">
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left text-slate-600">
+          <thead class="bg-slate-100/80 text-[10px] text-slate-500 uppercase border-b font-bold">
+            <tr>
+              <th class="p-3.5">Producto</th>
+              <th class="p-3.5">Ubicación / Nave</th>
+              <th class="p-3.5">Lote</th>
+              <th class="p-3.5 text-center">Cajas</th>
+              <th class="p-3.5 text-center">Kilos Reales</th>
+              <th class="p-3.5 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaStockBody" class="divide-y divide-slate-100 font-semibold text-slate-700">
+            <tr><td colspan="6" class="p-6 text-center text-slate-400">Cargando inventario multialmacén...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL CREAR ALMACÉN / NAVE -->
+  <div id="modalNuevoAlmacen" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-slate-200">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-extrabold text-blue-900 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-warehouse text-blue-600"></i> Registrar Nueva Nave o Cámara
+        </h3>
+        <button onclick="cerrarModalNuevoAlmacen()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-500 uppercase mb-1">Nombre de la Ubicación / Cámara *</label>
+          <input type="text" id="nuevoAlmacenNombre" placeholder="Ej: Nave 2 - Cámara Congelados" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-500 uppercase mb-1">Dirección / Polígono</label>
+          <input type="text" id="nuevoAlmacenUbicacion" placeholder="Ej: Polígono La Redondilla, Parcela 4" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-500 uppercase mb-1">Temperatura de Conservación</label>
+          <select id="nuevoAlmacenTemp" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+            <option value="-18ºC">-18ºC (Congelación)</option>
+            <option value="-25ºC">-25ºC (Ultra-congelación)</option>
+            <option value="0ºC a 4ºC">0ºC a 4ºC (Refrigerado / Fresco)</option>
+            <option value="Ambiente">Temperatura Ambiente (Seco)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 border-t pt-3">
+        <button onclick="cerrarModalNuevoAlmacen()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition">Cancelar</button>
+        <button onclick="guardarNuevoAlmacen()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs shadow transition">Guardar Nave</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL TRANSFERENCIA ENTRE NAVES -->
+  <div id="modalTransferencia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-extrabold text-amber-900 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-right-left text-amber-600"></i> Transferir Género Entre Naves / Cámaras
+        </h3>
+        <button onclick="cerrarModalTransferencia()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-500 uppercase mb-1">Producto a Transferir *</label>
+          <select id="transfProductoSelect" onchange="actualizarMaximosTransferencia()" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800"></select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-500 uppercase mb-1">Nave / Cámara Origen *</label>
+            <select id="transfOrigenSelect" onchange="actualizarMaximosTransferencia()" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800"></select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-500 uppercase mb-1">Nave / Cámara Destino *</label>
+            <select id="transfDestinoSelect" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800"></select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-500 uppercase mb-1">Cajas a Mover</label>
+            <input type="number" id="transfCajasInput" min="1" value="1" oninput="calcularKilosTransferencia()" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-center">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-500 uppercase mb-1">Kilos a Mover (KG)</label>
+            <input type="number" id="transfKilosInput" step="0.01" value="0.00" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-center">
+          </div>
+        </div>
+
+        <div id="infoStockDisponibleTransf" class="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px] font-bold">
+          Disponible en origen: <span id="dispCajasSpan">0</span> caj. / <span id="dispKilosSpan">0.00</span> kg
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 border-t pt-3">
+        <button onclick="cerrarModalTransferencia()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition">Cancelar</button>
+        <button onclick="ejecutarTransferencia()" class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl text-xs shadow transition">Confirmar Traslado</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let almacenesCache = [];
+    let productosCache = [];
+    let stockDetalladoCache = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await cargarTodo();
+    });
+
+    async function cargarTodo() {
+      await cargarAlmacenes();
+      await cargarProductos();
+      await cargarStockDetallado();
+      renderizarTodo();
+    }
+
+    async function cargarAlmacenes() {
+      const empresaId = getEmpresaIdActivo();
+      let query = dbClient.from('almacenes').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data } = await query.order('nombre', { ascending: true });
+      almacenesCache = data || [];
+
+      // Si no tiene almacenes creados, crear el primero automáticamente
+      if (almacenesCache.length === 0 && empresaId) {
+        const { data: nuevo } = await dbClient.from('almacenes').insert([{
+          empresa_id: empresaId,
+          nombre: 'Cámara Principal Frío 1',
+          ubicacion: 'Nave Central',
+          temperatura: '-18ºC'
+        }]).select().maybeSingle();
+        if (nuevo) almacenesCache = [nuevo];
+      }
+    }
+
+    async function cargarProductos() {
+      const empresaId = getEmpresaIdActivo();
+      let query = dbClient.from('productos').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data } = await query.order('nombre', { ascending: true });
+      productosCache = data || [];
+    }
+
+    async function cargarStockDetallado() {
+      const empresaId = getEmpresaIdActivo();
+      let query = dbClient.from('stock_almacenes').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data } = await query;
+      stockDetalladoCache = data || [];
+
+      // Si hay productos en catálogo que aún no tienen desglose, generar su entrada inicial
+      if (almacenesCache.length > 0) {
+        const almacenDefault = almacenesCache[0];
+        for (const p of productosCache) {
+          const tieneEntrada = stockDetalladoCache.some(s => String(s.producto_id) === String(p.id));
+          const totalCajas = Number(p.cajas_stock || p.stock_cajas || 0);
+          const totalKilos = parseFloat(p.kilos_stock || p.stock_kilos || 0);
+
+          if (!tieneEntrada && (totalCajas > 0 || totalKilos > 0)) {
+            const nuevaFila = {
+              empresa_id: empresaId,
+              almacen_id: almacenDefault.id,
+              almacen_nombre: almacenDefault.nombre,
+              producto_id: p.id,
+              producto_nombre: p.nombre || p.nombre_producto,
+              lote: 'LOT-GENERAL',
+              cajas: totalCajas,
+              kilos: totalKilos
+            };
+            await dbClient.from('stock_almacenes').insert([nuevaFila]);
+            stockDetalladoCache.push(nuevaFila);
+          }
+        }
+      }
+    }
+
+    function renderizarTodo() {
+      renderizarCardsAlmacenes();
+      poblarSelectoresAlmacen();
+      filtrarTablaStock();
+    }
+
+    function renderizarCardsAlmacenes() {
+      const cont = document.getElementById('gridAlmacenesCards');
+      cont.innerHTML = '';
+
+      almacenesCache.forEach(a => {
+        const lineasDeEste = stockDetalladoCache.filter(s => String(s.almacen_id) === String(a.id));
+        const totalCajas = lineasDeEste.reduce((acc, l) => acc + Number(l.cajas || 0), 0);
+        const totalKilos = lineasDeEste.reduce((acc, l) => acc + parseFloat(l.kilos || 0), 0);
+
+        cont.innerHTML += `
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="font-extrabold text-slate-800 text-xs">${a.nombre}</h3>
+                <span class="text-[10px] text-slate-400 font-semibold block">${a.ubicacion || 'Ubicación estándar'}</span>
+              </div>
+              <span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[9px] font-black font-mono border border-blue-100">${a.temperatura || '-18ºC'}</span>
+            </div>
+            <div class="border-t pt-2 flex justify-between items-end">
+              <span class="text-xs font-black text-slate-900">${totalCajas} <span class="text-[10px] text-slate-400 font-normal">cajas</span></span>
+              <span class="text-xs font-black text-emerald-600 font-mono">${totalKilos.toFixed(2)} kg</span>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function poblarSelectoresAlmacen() {
+      const filtro = document.getElementById('filtroAlmacenSelect');
+      const transfOrig = document.getElementById('transfOrigenSelect');
+      const transfDest = document.getElementById('transfDestinoSelect');
+      const transfProd = document.getElementById('transfProductoSelect');
+
+      filtro.innerHTML = '<option value="TODOS">🏢 Todas las Naves / Cámaras</option>';
+      transfOrig.innerHTML = '';
+      transfDest.innerHTML = '';
+
+      almacenesCache.forEach(a => {
+        filtro.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
+        transfOrig.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
+        transfDest.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
+      });
+
+      transfProd.innerHTML = '<option value="">-- Seleccionar producto --</option>';
+      productosCache.forEach(p => {
+        transfProd.innerHTML += `<option value="${p.id}">${p.nombre || p.nombre_producto}</option>`;
+      });
+    }
+
+    function filtrarTablaStock() {
+      const query = document.getElementById('buscarStockInput').value.toLowerCase().trim();
+      const almSel = document.getElementById('filtroAlmacenSelect').value;
+      const tbody = document.getElementById('tablaStockBody');
+
+      let filtrados = stockDetalladoCache.filter(s => {
+        const matchTxt = (s.producto_nombre || '').toLowerCase().includes(query) || (s.lote || '').toLowerCase().includes(query);
+        const matchAlm = (almSel === 'TODOS' || String(s.almacen_id) === String(almSel));
+        return matchTxt && matchAlm && (Number(s.cajas) > 0 || Number(s.kilos) > 0);
+      });
+
+      if (filtrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">No hay existencias registradas con estos filtros.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtrados.map(s => `
+        <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+          <td class="p-3.5 font-bold text-slate-900">${s.producto_nombre}</td>
+          <td class="p-3.5 font-bold text-blue-700">
+            <span class="px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-[11px]">${s.almacen_nombre}</span>
+          </td>
+          <td class="p-3.5 font-mono text-slate-500 text-[11px]">${s.lote || 'LOT-GENERAL'}</td>
+          <td class="p-3.5 text-center font-bold text-slate-700">${s.cajas} caj.</td>
+          <td class="p-3.5 text-center font-bold text-emerald-700 font-mono">${parseFloat(s.kilos || 0).toFixed(2)} kg</td>
+          <td class="p-3.5 text-center">
+            <button onclick="abrirModalTransferenciaConProducto('${s.producto_id}', '${s.almacen_id}')" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold rounded-lg text-xs transition shadow-sm" title="Mover a otra nave">
+              <i class="fa-solid fa-right-left"></i> Trasladar
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // MODAL NUEVO ALMACÉN
+    function abrirModalNuevoAlmacen() {
+      document.getElementById('nuevoAlmacenNombre').value = '';
+      document.getElementById('nuevoAlmacenUbicacion').value = '';
+      document.getElementById('modalNuevoAlmacen').classList.remove('hidden');
+      document.getElementById('modalNuevoAlmacen').classList.add('flex');
+    }
+
+    function cerrarModalNuevoAlmacen() {
+      document.getElementById('modalNuevoAlmacen').classList.add('hidden');
+      document.getElementById('modalNuevoAlmacen').classList.remove('flex');
+    }
+
+    async function guardarNuevoAlmacen() {
+      const nombre = document.getElementById('nuevoAlmacenNombre').value.trim();
+      const ubicacion = document.getElementById('nuevoAlmacenUbicacion').value.trim();
+      const temp = document.getElementById('nuevoAlmacenTemp').value;
+      const empresaId = getEmpresaIdActivo();
+
+      if (!nombre) return alert("⚠️ Escribe el nombre de la nave o cámara.");
+
+      const { error } = await dbClient.from('almacenes').insert([{
+        empresa_id: empresaId,
+        nombre: nombre,
+        ubicacion: ubicacion,
+        temperatura: temp
+      }]);
+
+      if (error) {
+        alert("Error al crear almacén: " + error.message);
+      } else {
+        alert("✅ Nave / Cámara creada correctamente.");
+        cerrarModalNuevoAlmacen();
+        await cargarTodo();
+      }
+    }
+
+    // MODAL TRANSFERENCIA ENTRE NAVES
+    function abrirModalTransferencia() {
+      document.getElementById('modalTransferencia').classList.remove('hidden');
+      document.getElementById('modalTransferencia').classList.add('flex');
+      actualizarMaximosTransferencia();
+    }
+
+    function abrirModalTransferenciaConProducto(productoId, almacenOrigenId) {
+      abrirModalTransferencia();
+      document.getElementById('transfProductoSelect').value = productoId;
+      document.getElementById('transfOrigenSelect').value = almacenOrigenId;
+      actualizarMaximosTransferencia();
+    }
+
+    function cerrarModalTransferencia() {
+      document.getElementById('modalTransferencia').classList.add('hidden');
+      document.getElementById('modalTransferencia').classList.remove('flex');
+    }
+
+    function actualizarMaximosTransferencia() {
+      const prodId = document.getElementById('transfProductoSelect').value;
+      const origId = document.getElementById('transfOrigenSelect').value;
+
+      const entrada = stockDetalladoCache.find(s => String(s.producto_id) === String(prodId) && String(s.almacen_id) === String(origId));
+      const cajasDisp = entrada ? Number(entrada.cajas || 0) : 0;
+      const kilosDisp = entrada ? parseFloat(entrada.kilos || 0) : 0;
+
+      document.getElementById('dispCajasSpan').innerText = cajasDisp;
+      document.getElementById('dispKilosSpan').innerText = kilosDisp.toFixed(2);
+      calcularKilosTransferencia();
+    }
+
+    function calcularKilosTransferencia() {
+      const prodId = document.getElementById('transfProductoSelect').value;
+      const prod = productosCache.find(p => String(p.id) === String(prodId));
+      const cajas = Number(document.getElementById('transfCajasInput').value) || 0;
+      if (prod) {
+        const pesoCaja = prod.peso_caja_kg || 10;
+        document.getElementById('transfKilosInput').value = (cajas * pesoCaja).toFixed(2);
+      }
+    }
+
+    async function ejecutarTransferencia() {
+      const prodId = document.getElementById('transfProductoSelect').value;
+      const origId = document.getElementById('transfOrigenSelect').value;
+      const destId = document.getElementById('transfDestinoSelect').value;
+      const cajasMover = Number(document.getElementById('transfCajasInput').value) || 0;
+      const kilosMover = parseFloat(document.getElementById('transfKilosInput').value) || 0;
+
+      if (!prodId) return alert("⚠️ Selecciona el producto.");
+      if (origId === destId) return alert("⚠️ La nave de origen y destino deben ser distintas.");
+      if (cajasMover <= 0 && kilosMover <= 0) return alert("⚠️ Indica las cajas o kilos a trasladar.");
+
+      const filaOrigen = stockDetalladoCache.find(s => String(s.producto_id) === String(prodId) && String(s.almacen_id) === String(origId));
+      if (!filaOrigen || Number(filaOrigen.cajas) < cajasMover || parseFloat(filaOrigen.kilos) < kilosMover) {
+        return alert("⛔ No hay suficiente stock en la nave de origen para realizar este traslado.");
+      }
+
+      const empresaId = getEmpresaIdActivo();
+      const almDest = almacenesCache.find(a => String(a.id) === String(destId));
+      const prod = productosCache.find(p => String(p.id) === String(prodId));
+
+      try {
+        // 1. Restar de Origen
+        await dbClient.from('stock_almacenes').update({
+          cajas: Number(filaOrigen.cajas) - cajasMover,
+          kilos: parseFloat(filaOrigen.kilos) - kilosMover,
+          updated_at: new Date()
+        }).eq('id', filaOrigen.id);
+
+        // 2. Sumar o Insertar en Destino
+        const filaDestino = stockDetalladoCache.find(s => String(s.producto_id) === String(prodId) && String(s.almacen_id) === String(destId));
+        if (filaDestino) {
+          await dbClient.from('stock_almacenes').update({
+            cajas: Number(filaDestino.cajas) + cajasMover,
+            kilos: parseFloat(filaDestino.kilos) + kilosMover,
+            updated_at: new Date()
+          }).eq('id', filaDestino.id);
+        } else {
+          await dbClient.from('stock_almacenes').insert([{
+            empresa_id: empresaId,
+            almacen_id: destId,
+            almacen_nombre: almDest.nombre,
+            producto_id: prodId,
+            producto_nombre: prod.nombre || prod.nombre_producto,
+            lote: filaOrigen.lote || 'LOT-GENERAL',
+            cajas: cajasMover,
+            kilos: kilosMover
+          }]);
+        }
+
+        alert(`✅ Traslado completado: ${cajasMover} cajas de "${prod.nombre}" movidas a "${almDest.nombre}".`);
+        cerrarModalTransferencia();
+        await cargarTodo();
+
+      } catch (err) {
+        alert("Error en la transferencia: " + err.message);
+      }
+    }
+  </script>
+</body>
+</html>
