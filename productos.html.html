@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catálogo de Productos y Trazabilidad - ERP Distribución</title>
+
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <div class="max-w-7xl mx-auto space-y-6 px-4 pt-6">
+
+    <!-- CABECERA -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h1 class="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-boxes-stacked text-blue-600"></i> Catálogo de Productos, Ubicación y Trazabilidad
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Control de costes, PVP, tara de envases, lotes, caducidades e impresión de etiquetas.</p>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <a href="almacen.html" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition border border-slate-200 flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-warehouse"></i> Ver Naves y Cámaras
+        </a>
+        <button onclick="abrirModalProducto()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs shadow transition flex items-center gap-2 uppercase tracking-wider">
+          <i class="fa-solid fa-plus-circle"></i> + Nuevo Producto
+        </button>
+      </div>
+    </div>
+
+    <!-- FILTROS Y ORDENACIÓN -->
+    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-center">
+      <div class="relative">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </span>
+        <input type="text" id="inputBuscar" oninput="filtrarProductos()" placeholder="Buscar por producto, lote..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+      </div>
+      
+      <div>
+        <select id="filtroCategoria" onchange="filtrarProductos()" class="w-full p-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500">
+          <option value="TODAS">📁 Todas las Categorías</option>
+        </select>
+      </div>
+
+      <div>
+        <select id="filtroNave" onchange="filtrarProductos()" class="w-full p-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500">
+          <option value="TODAS">🏢 Todas las Naves / Cámaras</option>
+        </select>
+      </div>
+
+      <div>
+        <select id="ordenSelect" onchange="filtrarProductos()" class="w-full p-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500">
+          <option value="caducidad_asc">⏳ Caducidad: Más próxima a vencer</option>
+          <option value="caducidad_desc">⏳ Caducidad: Más lejana</option>
+          <option value="stock_desc">📦 Mayor Stock primero</option>
+          <option value="stock_asc">📦 Menor Stock primero</option>
+          <option value="nombre_asc">🔤 Nombre: A - Z</option>
+          <option value="nombre_desc">🔤 Nombre: Z - A</option>
+          <option value="pvp_desc">💶 PVP: Mayor a Menor</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- TABLA DE PRODUCTOS -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left text-slate-600">
+          <thead class="bg-slate-100/80 text-[10px] text-slate-500 uppercase border-b font-bold">
+            <tr>
+              <th class="p-3.5">Producto</th>
+              <th class="p-3.5 text-right">Coste</th>
+              <th class="p-3.5 text-right">PVP</th>
+              <th class="p-3.5 text-center">Tara Envase</th>
+              <th class="p-3.5 text-center">Stock</th>
+              <th class="p-3.5">Ubicación / Nave</th>
+              <th class="p-3.5">Lote</th>
+              <th class="p-3.5 text-center">Caducidad</th>
+              <th class="p-3.5 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaProductosBody" class="divide-y divide-slate-100 font-semibold text-slate-700">
+            <tr><td colspan="9" class="p-6 text-center text-slate-400">Cargando catálogo de productos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL CREAR / EDITAR PRODUCTO -->
+  <div id="modalProducto" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border border-slate-200">
+      
+      <div class="bg-blue-900 text-white p-4 flex justify-between items-center">
+        <h3 id="modalProductoTitulo" class="font-bold text-sm flex items-center gap-2">
+          <i class="fa-solid fa-tag text-amber-400"></i> Ficha de Producto y Trazabilidad
+        </h3>
+        <button onclick="cerrarModalProducto()" class="text-slate-300 hover:text-white font-bold text-lg px-2">✕</button>
+      </div>
+
+      <form onsubmit="guardarProducto(event)" class="p-6 space-y-4 text-xs">
+        <input type="hidden" id="prodId">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="md:col-span-2">
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nombre Comercial del Producto *</label>
+            <input type="text" id="prodNombre" required placeholder="Ej: Gamba Blanca Huelva No. 2" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Categoría</label>
+            <input type="text" id="prodCategoria" placeholder="Ej: Marisco, Pescado Blanco" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Formato / Presentación</label>
+            <input type="text" id="prodFormato" placeholder="Ej: Estuche 2 kg, IQF, Bloque" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Precio Coste (€/kg)</label>
+            <input type="number" id="prodCoste" step="0.01" value="0.00" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold text-slate-800 text-right focus:bg-white focus:outline-none focus:border-blue-500">
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Precio Venta PVP (€/kg) *</label>
+            <input type="number" id="prodPvp" step="0.01" required value="0.00" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-black text-blue-900 text-right focus:bg-white focus:outline-none focus:border-blue-500">
+          </div>
+
+          <!-- CAMPO DESTARE / TARA -->
+          <div class="bg-amber-50 p-2.5 rounded-xl border border-amber-200">
+            <label class="block text-[10px] font-black text-amber-900 uppercase mb-1 flex items-center gap-1">
+              <i class="fa-solid fa-scale-unbalanced text-amber-600"></i> Tara por Caja (kg)
+            </label>
+            <input type="number" id="prodTara" step="0.001" value="0.000" placeholder="0.350" class="w-full p-2 bg-white border border-amber-300 rounded-lg font-mono font-bold text-amber-950 text-center focus:outline-none focus:ring-1 focus:ring-amber-500">
+            <span class="text-[9px] text-amber-700 block mt-0.5">Peso del envase a descontar automáticamente.</span>
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Peso Promedio por Caja (kg)</label>
+            <input type="number" id="prodPesoCaja" step="0.01" value="10.00" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-center text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nº Lote de Trazabilidad</label>
+            <input type="text" id="prodLote" placeholder="Ej: LOT-2026-081" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha de Caducidad</label>
+            <input type="date" id="prodFechaCaducidad" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Temperatura Conservación</label>
+            <select id="prodTemperatura" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500">
+              <option value="-18ºC">-18ºC (Congelado)</option>
+              <option value="-25ºC">-25ºC (Ultra-congelado)</option>
+              <option value="0ºC a 4ºC">0ºC a 4ºC (Refrigerado)</option>
+              <option value="Ambiente">Ambiente (Seco)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ASIGNACIÓN INICIAL DE NAVE -->
+        <div id="bloqueNaveInicial" class="p-3 bg-blue-50/60 rounded-xl border border-blue-100 space-y-2">
+          <label class="block text-[10px] font-bold text-blue-900 uppercase">🏢 Nave / Cámara de Ubicación Inicial</label>
+          <select id="prodAlmacenInicial" class="w-full p-2 bg-white border border-blue-200 rounded-xl font-bold text-blue-900"></select>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <div>
+              <label class="block text-[9px] font-bold text-slate-500 uppercase">Cajas Iniciales</label>
+              <input type="number" id="prodCajasIniciales" min="0" value="0" oninput="calcularKilosIniciales()" class="w-full p-1.5 bg-white border border-slate-300 rounded-lg text-center font-bold">
+            </div>
+            <div>
+              <label class="block text-[9px] font-bold text-slate-500 uppercase">Kilos Iniciales</label>
+              <input type="number" id="prodKilosIniciales" step="0.01" value="0.00" class="w-full p-1.5 bg-white border border-slate-300 rounded-lg text-center font-bold">
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 border-t pt-4">
+          <button type="button" onclick="cerrarModalProducto()" class="px-4 py-2 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200">Cancelar</button>
+          <button type="submit" id="btnGuardarProducto" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl shadow transition">
+            Guardar Producto
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let productosCache = [];
+    let almacenesCache = [];
+    let stockAlmacenesCache = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await cargarAlmacenes();
+      await cargarStockAlmacenes();
+      await cargarProductos();
+    });
+
+    function extraerNombreProducto(p) {
+      return p.nombre || p.nombre_producto || `Producto #${p.id}`;
+    }
+
+    async function cargarAlmacenes() {
+      const empresaId = getEmpresaIdActivo();
+      let query = dbClient.from('almacenes').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data } = await query.order('nombre', { ascending: true });
+      almacenesCache = data || [];
+
+      const filtroNave = document.getElementById('filtroNave');
+      const selInicial = document.getElementById('prodAlmacenInicial');
+      
+      filtroNave.innerHTML = '<option value="TODAS">🏢 Todas las Naves / Cámaras</option>';
+      selInicial.innerHTML = '';
+
+      almacenesCache.forEach(a => {
+        filtroNave.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
+        selInicial.innerHTML += `<option value="${a.id}">${a.nombre} (${a.temperatura || '-18ºC'})</option>`;
+      });
+    }
+
+    async function cargarStockAlmacenes() {
+      const empresaId = getEmpresaIdActivo();
+      let query = dbClient.from('stock_almacenes').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data } = await query;
+      stockAlmacenesCache = data || [];
+    }
+
+    async function cargarProductos() {
+      const empresaId = getEmpresaIdActivo();
+      let query = dbClient.from('productos').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data, error } = await query;
+
+      if (error) {
+        document.getElementById('tablaProductosBody').innerHTML = '<tr><td colspan="9" class="p-6 text-center text-rose-500 font-bold">Error al cargar productos.</td></tr>';
+        return;
+      }
+
+      productosCache = data || [];
+      poblarCategorias();
+      filtrarProductos();
+    }
+
+    function poblarCategorias() {
+      const select = document.getElementById('filtroCategoria');
+      select.innerHTML = '<option value="TODAS">📁 Todas las Categorías</option>';
+      const categorias = [...new Set(productosCache.map(p => p.categoria).filter(Boolean))];
+      categorias.forEach(cat => {
+        select.innerHTML += `<option value="${cat}">${cat}</option>`;
+      });
+    }
+
+    function formatearFechaCaducidad(fechaStr) {
+      if (!fechaStr) return '<span class="text-slate-400 font-normal italic">Sin fecha</span>';
+      
+      const fecha = new Date(fechaStr);
+      const hoy = new Date();
+      const diffDias = Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24));
+      const fechaFormateada = fechaStr.split('T')[0];
+
+      if (diffDias < 0) {
+        return `<span class="px-2 py-0.5 bg-rose-100 text-rose-800 rounded font-black text-[10px] border border-rose-200">⚠️ ${fechaFormateada}</span>`;
+      } else if (diffDias <= 30) {
+        return `<span class="px-2 py-0.5 bg-amber-100 text-amber-900 rounded font-black text-[10px] border border-amber-300">⏳ ${fechaFormateada}</span>`;
+      } else {
+        return `<span class="font-mono text-slate-700 font-bold text-[11px]">${fechaFormateada}</span>`;
+      }
+    }
+
+    function imprimirEtiquetaDirecta(productoId) {
+      window.location.href = `etiquetas.html?producto_id=${productoId}`;
+    }
+
+    function filtrarProductos() {
+      const q = document.getElementById('inputBuscar').value.toLowerCase().trim();
+      const cat = document.getElementById('filtroCategoria').value;
+      const nave = document.getElementById('filtroNave').value;
+      const criterioOrden = document.getElementById('ordenSelect').value;
+      const tbody = document.getElementById('tablaProductosBody');
+
+      let filtrados = productosCache.filter(p => {
+        const nombre = extraerNombreProducto(p).toLowerCase();
+        const categoria = (p.categoria || '').toLowerCase();
+        const lote = (p.lote || '').toLowerCase();
+        const coincideTxt = nombre.includes(q) || categoria.includes(q) || lote.includes(q);
+        const coincideCat = (cat === 'TODAS' || p.categoria === cat);
+
+        let coincideNave = true;
+        if (nave !== 'TODAS') {
+          coincideNave = stockAlmacenesCache.some(s => String(s.producto_id) === String(p.id) && String(s.almacen_id) === String(nave) && (Number(s.cajas) > 0 || Number(s.kilos) > 0));
+        }
+
+        return coincideTxt && coincideCat && coincideNave;
+      });
+
+      filtrados.sort((a, b) => {
+        if (criterioOrden === 'caducidad_asc') {
+          if (!a.fecha_caducidad) return 1;
+          if (!b.fecha_caducidad) return -1;
+          return new Date(a.fecha_caducidad) - new Date(b.fecha_caducidad);
+        }
+        if (criterioOrden === 'caducidad_desc') {
+          if (!a.fecha_caducidad) return 1;
+          if (!b.fecha_caducidad) return -1;
+          return new Date(b.fecha_caducidad) - new Date(a.fecha_caducidad);
+        }
+        if (criterioOrden === 'stock_desc') return (Number(b.cajas_stock || 0)) - (Number(a.cajas_stock || 0));
+        if (criterioOrden === 'stock_asc') return (Number(a.cajas_stock || 0)) - (Number(b.cajas_stock || 0));
+        if (criterioOrden === 'nombre_asc') return extraerNombreProducto(a).localeCompare(extraerNombreProducto(b));
+        if (criterioOrden === 'nombre_desc') return extraerNombreProducto(b).localeCompare(extraerNombreProducto(a));
+        if (criterioOrden === 'pvp_desc') return (parseFloat(b.precio_kg || 0)) - (parseFloat(a.precio_kg || 0));
+        return 0;
+      });
+
+      if (filtrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-slate-400">No se encontraron productos con esos filtros.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtrados.map(p => {
+        const nombre = extraerNombreProducto(p);
+        const coste = parseFloat(p.precio_coste || p.coste || 0);
+        const pvp = parseFloat(p.precio_kg || p.precio_venta || p.pvp || p.precio || 0);
+        const tara = parseFloat(p.tara_caja_kg || 0);
+        const totalCajas = Number(p.cajas_stock || p.stock_cajas || 0);
+        const totalKilos = parseFloat(p.kilos_stock || p.stock_kilos || 0);
+        const loteMostrar = p.lote || 'LOT-GENERAL';
+        const caducidadHTML = formatearFechaCaducidad(p.fecha_caducidad);
+
+        const navesDelProducto = stockAlmacenesCache.filter(s => String(s.producto_id) === String(p.id) && (Number(s.cajas) > 0 || Number(s.kilos) > 0));
+        let badgesNaves = '';
+
+        if (navesDelProducto.length > 0) {
+          badgesNaves = navesDelProducto.map(n => `
+            <span class="inline-block px-2 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded text-[10px] font-bold mr-1 mb-1">
+              ${n.almacen_nombre}: <strong>${n.cajas} caj.</strong> (${parseFloat(n.kilos).toFixed(1)} kg)
+            </span>
+          `).join('');
+        } else {
+          badgesNaves = `<span class="text-slate-400 text-[10px] italic">Sin asignar nave</span>`;
+        }
+
+        return `
+          <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+            <td class="p-3.5 font-bold text-slate-900">
+              ${nombre}
+              <span class="block text-[10px] text-slate-400 font-normal">${p.categoria || 'Congelados'} · ${p.formato || 'Caja estándar'}</span>
+            </td>
+            <td class="p-3.5 text-right font-mono font-bold text-slate-600">${coste.toFixed(2)} €</td>
+            <td class="p-3.5 text-right font-mono font-black text-blue-900">${pvp.toFixed(2)} €</td>
+            <td class="p-3.5 text-center font-bold">
+              ${tara > 0 ? `<span class="px-2 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 rounded font-mono text-[10px]">${tara.toFixed(3)} kg/caj</span>` : `<span class="text-slate-400 text-[10px]">0.000</span>`}
+            </td>
+            <td class="p-3.5 text-center font-bold ${totalCajas > 0 ? 'text-slate-900' : 'text-rose-500'}">
+              ${totalCajas} caj. <span class="font-mono text-emerald-700 block text-[11px]">(${totalKilos.toFixed(2)} kg)</span>
+            </td>
+            <td class="p-3.5 max-w-xs">
+              ${badgesNaves}
+            </td>
+            <td class="p-3.5 font-mono text-slate-600 text-[11px] font-bold">
+              ${loteMostrar}
+            </td>
+            <td class="p-3.5 text-center">
+              ${caducidadHTML}
+            </td>
+            <td class="p-3.5 text-center space-x-1 whitespace-nowrap">
+              <button onclick="imprimirEtiquetaDirecta('${p.id}')" title="Imprimir Pegatina Lista" class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-black rounded-lg text-xs transition shadow-sm">
+                <i class="fa-solid fa-print mr-1"></i> Etiqueta
+              </button>
+              <button onclick="editarProducto('${p.id}')" title="Editar Producto y Tara" class="p-1 text-blue-600 hover:bg-blue-50 rounded-lg transition">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button onclick="eliminarProducto('${p.id}', '${nombre.replace(/'/g, "\\'")}')" title="Eliminar Producto" class="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function calcularKilosIniciales() {
+      const pesoCaja = parseFloat(document.getElementById('prodPesoCaja').value) || 10;
+      const cajas = parseInt(document.getElementById('prodCajasIniciales').value) || 0;
+      document.getElementById('prodKilosIniciales').value = (cajas * pesoCaja).toFixed(2);
+    }
+
+    function abrirModalProducto() {
+      document.getElementById('prodId').value = '';
+      document.getElementById('prodNombre').value = '';
+      document.getElementById('prodCategoria').value = '';
+      document.getElementById('prodFormato').value = '';
+      document.getElementById('prodCoste').value = '0.00';
+      document.getElementById('prodPvp').value = '0.00';
+      document.getElementById('prodTara').value = '0.000';
+      document.getElementById('prodLote').value = 'LOT-' + new Date().getFullYear() + '-' + Math.floor(Math.random() * 900 + 100);
+      document.getElementById('prodFechaCaducidad').value = '';
+      document.getElementById('prodPesoCaja').value = '10.00';
+      document.getElementById('prodTemperatura').value = '-18ºC';
+      document.getElementById('prodCajasIniciales').value = '0';
+      document.getElementById('prodKilosIniciales').value = '0.00';
+      
+      document.getElementById('bloqueNaveInicial').classList.remove('hidden');
+      document.getElementById('modalProductoTitulo').innerHTML = '<i class="fa-solid fa-plus-circle text-amber-400"></i> Alta de Nuevo Producto';
+      document.getElementById('modalProducto').classList.remove('hidden');
+      document.getElementById('modalProducto').classList.add('flex');
+    }
+
+    function editarProducto(id) {
+      const p = productosCache.find(item => String(item.id) === String(id));
+      if (!p) return;
+
+      document.getElementById('prodId').value = p.id;
+      document.getElementById('prodNombre').value = extraerNombreProducto(p);
+      document.getElementById('prodCategoria').value = p.categoria || '';
+      document.getElementById('prodFormato').value = p.formato || '';
+      document.getElementById('prodCoste').value = parseFloat(p.precio_coste || p.coste || 0).toFixed(2);
+      document.getElementById('prodPvp').value = parseFloat(p.precio_kg || p.precio_venta || p.pvp || p.precio || 0).toFixed(2);
+      document.getElementById('prodTara').value = parseFloat(p.tara_caja_kg || 0).toFixed(3);
+      document.getElementById('prodLote').value = p.lote || 'LOT-GENERAL';
+      document.getElementById('prodFechaCaducidad').value = (p.fecha_caducidad || '').split('T')[0];
+      document.getElementById('prodPesoCaja').value = parseFloat(p.peso_caja_kg || 10).toFixed(2);
+      document.getElementById('prodTemperatura').value = p.temperatura || '-18ºC';
+
+      document.getElementById('bloqueNaveInicial').classList.add('hidden');
+      document.getElementById('modalProductoTitulo').innerHTML = `<i class="fa-solid fa-pen text-amber-400"></i> Modificar: ${extraerNombreProducto(p)}`;
+      document.getElementById('modalProducto').classList.remove('hidden');
+      document.getElementById('modalProducto').classList.add('flex');
+    }
+
+    function cerrarModalProducto() {
+      document.getElementById('modalProducto').classList.add('hidden');
+      document.getElementById('modalProducto').classList.remove('flex');
+    }
+
+    async function guardarProducto(e) {
+      e.preventDefault();
+      const id = document.getElementById('prodId').value;
+      const nombre = document.getElementById('prodNombre').value.trim();
+      const categoria = document.getElementById('prodCategoria').value.trim() || 'Congelados';
+      const formato = document.getElementById('prodFormato').value.trim() || 'Caja estándar';
+      const coste = parseFloat(document.getElementById('prodCoste').value) || 0;
+      const pvp = parseFloat(document.getElementById('prodPvp').value) || 0;
+      const tara = parseFloat(document.getElementById('prodTara').value) || 0;
+      const lote = document.getElementById('prodLote').value.trim() || 'LOT-GENERAL';
+      const fechaCaducidad = document.getElementById('prodFechaCaducidad').value || null;
+      const pesoCaja = parseFloat(document.getElementById('prodPesoCaja').value) || 10;
+      const temp = document.getElementById('prodTemperatura').value;
+      const empresaId = getEmpresaIdActivo();
+
+      const btn = document.getElementById('btnGuardarProducto');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Guardando...';
+
+      const payload = {
+        empresa_id: empresaId,
+        nombre: nombre,
+        nombre_producto: nombre,
+        categoria: categoria,
+        formato: formato,
+        precio_coste: coste,
+        coste: coste,
+        precio_kg: pvp,
+        precio_venta: pvp,
+        pvp: pvp,
+        precio: pvp,
+        tara_caja_kg: tara,
+        lote: lote,
+        fecha_caducidad: fechaCaducidad,
+        peso_caja_kg: pesoCaja,
+        temperatura: temp
+      };
+
+      try {
+        if (id) {
+          const { error } = await dbClient.from('productos').update(payload).eq('id', id);
+          if (error) throw error;
+
+          await dbClient.from('stock_almacenes').update({
+            lote: lote,
+            fecha_caducidad: fechaCaducidad,
+            producto_nombre: nombre
+          }).eq('producto_id', id);
+
+        } else {
+          const cajasInit = parseInt(document.getElementById('prodCajasIniciales').value) || 0;
+          const kilosInit = parseFloat(document.getElementById('prodKilosIniciales').value) || (cajasInit * pesoCaja);
+          const almId = document.getElementById('prodAlmacenInicial').value;
+          const almObj = almacenesCache.find(a => String(a.id) === String(almId));
+
+          payload.cajas_stock = cajasInit;
+          payload.kilos_stock = kilosInit;
+          payload.stock_cajas = cajasInit;
+          payload.stock_kilos = kilosInit;
+
+          const { data: prodCreado, error: errInsert } = await dbClient.from('productos').insert([payload]).select().single();
+          if (errInsert) throw errInsert;
+
+          if (prodCreado && (cajasInit > 0 || kilosInit > 0) && almId) {
+            await dbClient.from('stock_almacenes').insert([{
+              empresa_id: empresaId,
+              almacen_id: almId,
+              almacen_nombre: almObj ? almObj.nombre : 'Cámara Principal',
+              producto_id: prodCreado.id,
+              producto_nombre: nombre,
+              lote: lote,
+              fecha_caducidad: fechaCaducidad,
+              cajas: cajasInit,
+              kilos: kilosInit
+            }]);
+          }
+        }
+
+        alert("✅ Producto guardado correctamente.");
+        cerrarModalProducto();
+        await cargarStockAlmacenes();
+        await cargarProductos();
+
+      } catch (err) {
+        alert("❌ Error al guardar producto: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Guardar Producto';
+      }
+    }
+
+    async function eliminarProducto(id, nombre) {
+      if (!confirm(`⚠️ ¿Seguro que deseas eliminar el producto "${nombre}" del catálogo?`)) return;
+
+      const { error } = await dbClient.from('productos').delete().eq('id', id);
+
+      if (error) {
+        alert("Error al eliminar producto: " + error.message);
+      } else {
+        await cargarStockAlmacenes();
+        await cargarProductos();
+      }
+    }
+  </script>
+</body>
+</html>
