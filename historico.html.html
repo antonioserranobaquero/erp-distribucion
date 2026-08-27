@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Histórico de Albaranes y Abonos - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS Client & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+    @media print {
+      body * { visibility: hidden; }
+      .no-print { display: none !important; }
+      #hojaImpresion, #hojaImpresion * { visibility: visible; }
+      #hojaImpresion {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <div class="max-w-7xl mx-auto space-y-6 px-3 sm:px-4 pt-6 no-print">
+
+    <!-- CABECERA -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
+      <div>
+        <h1 class="text-lg sm:text-xl font-extrabold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-clock-rotate-left text-blue-600"></i> Histórico de Albaranes y Ventas
+        </h1>
+        <p class="text-xs text-slate-500 mt-1" id="subtituloPermisos">Consulta, gestiona, rectifica o anula albaranes de la empresa.</p>
+      </div>
+
+      <!-- BOTONES DE FILTRO TEMPORAL RÁPIDO -->
+      <div class="flex flex-wrap bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold gap-1 w-full md:w-auto">
+        <button id="btnFiltroHoy" onclick="setFiltroPeriodo('hoy')" class="flex-1 md:flex-none px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">Hoy</button>
+        <button id="btnFiltroMes" onclick="setFiltroPeriodo('mes')" class="flex-1 md:flex-none px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">Este Mes</button>
+        <button id="btnFiltroAno" onclick="setFiltroPeriodo('ano')" class="flex-1 md:flex-none px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">Este Año</button>
+        <button id="btnFiltroTodos" onclick="setFiltroPeriodo('todos')" class="flex-1 md:flex-none px-3 py-1.5 rounded-lg bg-blue-600 text-white shadow transition">Todo</button>
+      </div>
+    </div>
+
+    <!-- FILTROS AVANZADOS -->
+    <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+      <div>
+        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Buscar Cliente o Nº Albarán</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </span>
+          <input type="text" id="searchInput" oninput="filtrarYOrdenarHistorico()" placeholder="Buscar..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        </div>
+      </div>
+
+      <div id="contenedorFiltroRepartidor">
+        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Filtrar por Asignación</label>
+        <select id="filtroRepartidorSelect" onchange="filtrarYOrdenarHistorico()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+          <option value="TODOS">👥 Todos los Repartidores / Comerciales</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha Concreta</label>
+        <input type="date" id="filtroFechaInput" onchange="aplicarFechaEspecifica()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+      </div>
+
+      <div>
+        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Ordenar por</label>
+        <select id="ordenSelect" onchange="filtrarYOrdenarHistorico()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+          <option value="fecha_desc">📅 Más reciente a más antiguo</option>
+          <option value="fecha_asc">📅 Más antiguo a más reciente</option>
+          <option value="importe_desc">💶 Mayor a menor importe</option>
+          <option value="importe_asc">💶 Menor a mayor importe</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- TARJETAS DE RESUMEN -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+        <div class="p-2.5 sm:p-3 bg-blue-50 text-blue-600 rounded-xl text-base sm:text-lg"><i class="fa-solid fa-receipt"></i></div>
+        <div>
+          <span class="block text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">Albaranes</span>
+          <span id="cardTotalAlbaranes" class="text-base sm:text-lg font-black text-slate-800">0</span>
+        </div>
+      </div>
+      <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+        <div class="p-2.5 sm:p-3 bg-indigo-50 text-indigo-600 rounded-xl text-base sm:text-lg"><i class="fa-solid fa-boxes-stacked"></i></div>
+        <div>
+          <span class="block text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">Total Cajas</span>
+          <span id="cardTotalCajas" class="text-base sm:text-lg font-black text-indigo-600">0</span>
+        </div>
+      </div>
+      <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+        <div class="p-2.5 sm:p-3 bg-emerald-50 text-emerald-600 rounded-xl text-base sm:text-lg"><i class="fa-solid fa-weight-hanging"></i></div>
+        <div>
+          <span class="block text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">Total Kilos</span>
+          <span id="cardTotalKilos" class="text-base sm:text-lg font-black text-emerald-600">0.00 kg</span>
+        </div>
+      </div>
+      <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+        <div class="p-2.5 sm:p-3 bg-amber-50 text-amber-600 rounded-xl text-base sm:text-lg"><i class="fa-solid fa-euro-sign"></i></div>
+        <div>
+          <span class="block text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">Facturación</span>
+          <span id="cardTotalFacturado" class="text-base sm:text-lg font-black text-amber-600">0.00 €</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLA PRINCIPAL -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left text-slate-600">
+          <thead class="text-[10px] text-slate-500 uppercase bg-slate-100/80 border-b font-bold">
+            <tr>
+              <th class="p-3.5">Nº Albarán</th>
+              <th class="p-3.5">Cliente</th>
+              <th class="p-3.5">Fecha</th>
+              <th class="p-3.5">Creado Por</th>
+              <th class="p-3.5">Repartidor Asignado</th>
+              <th class="p-3.5 text-center">Cajas / Kilos</th>
+              <th class="p-3.5 text-right">Total (€)</th>
+              <th class="p-3.5 text-center">Estado</th>
+              <th class="p-3.5 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="historicoBody" class="divide-y divide-slate-100 font-semibold text-slate-700">
+            <tr><td colspan="9" class="text-center py-8 text-slate-400">Cargando albaranes...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL VISOR RESPONSIVE / IMPRESIÓN A4 CON LOGO -->
+  <div id="modalVisor" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden">
+      
+      <!-- BARRA SUPERIOR -->
+      <div class="bg-slate-900 text-white px-4 py-3 flex justify-between items-center no-print shrink-0">
+        <h3 class="font-bold text-xs sm:text-sm flex items-center gap-2">
+          <i class="fa-solid fa-file-invoice text-blue-400"></i> Vista Previa de Albarán
+        </h3>
+        <div class="flex items-center gap-2 sm:gap-3">
+          <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition flex items-center gap-1.5 shadow">
+            <i class="fa-solid fa-print"></i> <span class="hidden sm:inline">Imprimir</span>
+          </button>
+          <button onclick="cerrarVisor()" class="text-slate-400 hover:text-white font-bold text-lg px-2">✕</button>
+        </div>
+      </div>
+
+      <!-- DOCUMENTO CON SCROLL -->
+      <div class="p-2 sm:p-6 overflow-y-auto bg-slate-100 flex justify-center flex-1">
+        <div id="hojaImpresion" class="bg-white p-4 sm:p-8 rounded-xl shadow border border-slate-200 w-full max-w-[800px] text-slate-800 font-sans space-y-4 sm:space-y-6">
+          
+          <!-- CABECERA RESPONSIVE CON LOGO (COLUMNA EN MÓVIL / FILA EN PC) -->
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-blue-900 pb-4 gap-3">
+            <div id="contenedorLogoVisor" class="flex items-center gap-3 w-full sm:w-auto">
+              <img id="vEmpresaLogo" src="" alt="Logo" class="max-h-12 max-w-[120px] sm:max-h-16 sm:max-w-[160px] object-contain rounded-lg hidden">
+              <div>
+                <h1 id="vEmpresaNombre" class="text-base sm:text-xl font-black text-blue-900 uppercase leading-tight">DISTRIBUCIONES CONGELADOS S.L.</h1>
+                <p id="vEmpresaSubtitulo" class="text-[10px] sm:text-xs text-slate-500 font-bold mt-0.5">Venta y Distribución de Pescados y Mariscos Congelados</p>
+              </div>
+            </div>
+
+            <div class="flex justify-between sm:block sm:text-right w-full sm:w-auto items-center">
+              <div class="bg-blue-50 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl border border-blue-200 inline-block">
+                <span class="text-[9px] sm:text-[10px] font-bold text-blue-700 uppercase tracking-wider block">ALBARÁN DE ENTREGA</span>
+                <h2 id="vNumAlbaran" class="text-xs sm:text-base font-black text-blue-900 mt-0.5">ALB-2026-000</h2>
+              </div>
+              <p id="vFecha" class="text-[11px] sm:text-xs font-bold text-slate-700 sm:mt-1 font-mono">Fecha: --/--/----</p>
+            </div>
+          </div>
+
+          <!-- DATOS CLIENTE Y REPARTIDOR -->
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row justify-between gap-2 text-xs">
+            <div>
+              <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">CLIENTE / DESTINATARIO</span>
+              <h3 id="vCliente" class="text-xs sm:text-sm font-black text-slate-900">-</h3>
+              <p id="vCreadoPor" class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5">Emitido por: -</p>
+            </div>
+            <div class="sm:text-right border-t sm:border-t-0 pt-1.5 sm:pt-0">
+              <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">REPARTIDOR / RUTA</span>
+              <h3 id="vRepartidor" class="text-xs sm:text-sm font-black text-blue-900">-</h3>
+            </div>
+          </div>
+
+          <!-- TABLA CON SCROLL HORIZONTAL TÁCTIL Y DESGLOSE DE DESTARE -->
+          <div class="overflow-x-auto -mx-2 sm:mx-0 border border-slate-200 sm:border-0 rounded-xl sm:rounded-none">
+            <table class="w-full text-[11px] sm:text-xs text-left text-slate-700 border-collapse min-w-[550px] sm:min-w-full">
+              <thead>
+                <tr class="bg-slate-100 border-b-2 border-slate-300 text-slate-800 font-bold">
+                  <th class="p-2 sm:p-2.5">Producto</th>
+                  <th class="p-2 sm:p-2.5">Lote</th>
+                  <th class="p-2 sm:p-2.5 text-center">Cajas</th>
+                  <th class="p-2 sm:p-2.5 text-center">P. Bruto</th>
+                  <th class="p-2 sm:p-2.5 text-center">Tara</th>
+                  <th class="p-2 sm:p-2.5 text-center bg-slate-200/60 font-black">Kilos Netos</th>
+                  <th class="p-2 sm:p-2.5 text-right">Precio (€/kg)</th>
+                  <th class="p-2 sm:p-2.5 text-right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody id="vTablaBody" class="divide-y divide-slate-100 font-semibold"></tbody>
+            </table>
+          </div>
+
+          <!-- PIE: FIRMA Y TOTALES -->
+          <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-end border-t-2 border-slate-200 pt-4 gap-3">
+            <div class="w-full sm:w-1/2 border border-dashed border-slate-300 rounded-xl p-2 text-center h-24 sm:h-28 flex items-center justify-center bg-slate-50/50 relative overflow-hidden">
+              <span id="vTextoSinFirma" class="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase">Firma / Sello de Recepción</span>
+              <img id="vImgFirmaHist" class="w-full h-full object-contain hidden" alt="Firma">
+            </div>
+            <div class="w-full sm:w-5/12 bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 text-right space-y-1 text-xs">
+              <p class="text-slate-600">Total Cajas: <strong id="vTotalCajas" class="text-slate-900">0</strong></p>
+              <p class="text-slate-600">Tara Descontada: <strong id="vTotalTara" class="text-amber-800 font-mono">0.00 kg</strong></p>
+              <p class="text-slate-600">Kilos Netos Facturados: <strong id="vTotalKilos" class="text-emerald-800 font-mono font-bold">0.00 kg</strong></p>
+              <p class="text-sm sm:text-base font-black text-blue-900 border-t border-slate-200 pt-1.5 mt-1 font-mono">Total Albarán: <span id="vTotalImporte">0.00 €</span></p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL ABONO -->
+  <div id="modalAbono" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-3 sm:p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200">
+      <div class="bg-rose-900 text-white p-4 flex justify-between items-center">
+        <h3 class="font-bold text-sm flex items-center gap-2">
+          <i class="fa-solid fa-rotate-left"></i> Procesar Abono de Albarán
+        </h3>
+        <button onclick="cerrarModalAbono()" class="text-slate-300 hover:text-white font-bold">✕</button>
+      </div>
+      <div class="p-6 space-y-4">
+        <input type="hidden" id="abonoAlbaranId">
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase block">Albarán</span>
+            <h4 id="abonoNumAlb" class="font-bold text-blue-900">-</h4>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase block">Cliente</span>
+            <h4 id="abonoCliente" class="font-bold text-slate-800">-</h4>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase block">Importe</span>
+            <h4 id="abonoImporteOrig" class="font-bold text-emerald-700">-</h4>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Destino de la Mercancía</label>
+          <select id="abonoDestino" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-bold text-slate-800">
+            <option value="REINTEGRAR">♻️ Reintegrar Stock a Cámaras</option>
+            <option value="MERMA">🗑️ Enviar a Mermas (Desechar)</option>
+          </select>
+        </div>
+
+        <div class="pt-4 flex justify-end gap-2 border-t">
+          <button onclick="cerrarModalAbono()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition">Cancelar</button>
+          <button onclick="confirmarAbonoAlbaran()" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold shadow transition">Emitir Rectificativa</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let historicoRaw = [];
+    let usuariosEmpresa = [];
+    let productosMap = {};
+    let periodoFiltroActual = 'todos';
+    let sesionUsuario = null;
+    let logoEmpresaUrl = null;
+    let nombreEmpresaActivo = 'DISTRIBUCIONES CONGELADOS S.L.';
+
+    function esUUID(valor) {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(valor || ''));
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      leerSesion();
+      await cargarDatosEmpresa();
+      await cargarUsuariosCombo();
+      await cargarHistorico();
+    });
+
+    function leerSesion() {
+      const sesionRaw = localStorage.getItem('erp_usuario_sesion') || localStorage.getItem('usuario_sesion');
+      if (sesionRaw) {
+        try {
+          sesionUsuario = JSON.parse(sesionRaw);
+        } catch(e) {}
+      }
+      
+      const rol = (sesionUsuario?.rol || 'ADMIN').toUpperCase();
+      if (rol === 'COMERCIAL') {
+        document.getElementById('subtituloPermisos').innerText = `Viendo exclusivamente tus albaranes y entregas (${sesionUsuario?.nombre || 'Comercial'}).`;
+      }
+    }
+
+    async function cargarDatosEmpresa() {
+      const empresaId = typeof getEmpresaIdActivo === 'function' ? getEmpresaIdActivo() : null;
+      if (!esUUID(empresaId)) return;
+
+      try {
+        const { data } = await db.from('empresas').select('nombre, nombre_comercial, logo_url').eq('id', empresaId).maybeSingle();
+        if (data) {
+          nombreEmpresaActivo = data.nombre_comercial || data.nombre || nombreEmpresaActivo;
+          logoEmpresaUrl = data.logo_url || localStorage.getItem('empresa_logo_activo') || null;
+        }
+      } catch (err) {}
+    }
+
+    async function cargarUsuariosCombo() {
+      const empresaId = typeof getEmpresaIdActivo === 'function' ? getEmpresaIdActivo() : null;
+      let query = db.from('usuarios').select('id, nombre, rol, email, activo');
+      if (esUUID(empresaId)) query = query.eq('empresa_id', empresaId);
+
+      const { data } = await query.order('nombre', { ascending: true });
+      usuariosEmpresa = (data || []).filter(u => u.activo !== false);
+
+      const select = document.getElementById('filtroRepartidorSelect');
+      select.innerHTML = '<option value="TODOS">👥 Todos los Repartidores / Comerciales</option>';
+
+      usuariosEmpresa.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.nombre || u.email;
+        opt.innerText = `${u.nombre || u.email} (${(u.rol || 'COMERCIAL').toUpperCase()})`;
+        select.appendChild(opt);
+      });
+    }
+
+    async function cargarHistorico() {
+      const empresaId = typeof getEmpresaIdActivo === 'function' ? getEmpresaIdActivo() : null;
+
+      try {
+        // 1. Cargar albaranes sin forzar columnas inexistentes en la base de datos
+        let qAlb = db.from('albaranes').select('*');
+        if (esUUID(empresaId)) qAlb = qAlb.eq('empresa_id', empresaId);
+        
+        const { data: albaranes, error: errAlb } = await qAlb;
+
+        if (errAlb) {
+          console.error("Error albaranes:", errAlb);
+          document.getElementById('historicoBody').innerHTML = `<tr><td colspan="9" class="text-center py-8 text-rose-500 font-bold">Error cargando albaranes: ${errAlb.message}</td></tr>`;
+          return;
+        }
+
+        // 2. Cargar clientes de forma tolerante
+        let clientes = [];
+        try {
+          let qCli = db.from('clientes').select('*');
+          if (esUUID(empresaId)) qCli = qCli.eq('empresa_id', empresaId);
+          const { data: clis } = await qCli;
+          if (clis) clientes = clis;
+        } catch(e) {}
+
+        // 3. Cargar productos de forma tolerante
+        try {
+          let qProd = db.from('productos').select('*');
+          if (esUUID(empresaId)) qProd = qProd.eq('empresa_id', empresaId);
+          const { data: prods } = await qProd;
+          if (prods) {
+            prods.forEach(p => { 
+              productosMap[p.id] = p.nombre || p.nombre_producto || `Producto #${p.id}`; 
+            });
+          }
+        } catch(e) {}
+
+        if (!albaranes || albaranes.length === 0) {
+          document.getElementById('historicoBody').innerHTML = '<tr><td colspan="9" class="text-center py-8 text-slate-400">No hay albaranes registrados todavía.</td></tr>';
+          actualizarMetricas([]);
+          return;
+        }
+
+        const miNombre = (sesionUsuario?.nombre || '').trim().toLowerCase();
+        const miEmail = (sesionUsuario?.email || '').trim().toLowerCase();
+        const rolActual = (sesionUsuario?.rol || 'ADMIN').toUpperCase();
+        const esAdminOJefe = (rolActual === 'ADMIN' || rolActual === 'SUPERADMIN');
+
+        historicoRaw = albaranes
+          .filter(a => {
+            if (esAdminOJefe) return true;
+
+            const creadorAlb = (a.creado_por || '').trim().toLowerCase();
+            const repartidorAlb = (a.repartidor || '').trim().toLowerCase();
+
+            return (
+              (miNombre && (creadorAlb === miNombre || repartidorAlb === miNombre)) || 
+              (miEmail && (creadorAlb === miEmail || repartidorAlb === miEmail))
+            );
+          })
+          .map(a => {
+            const cli = clientes.find(c => String(c.id) === String(a.cliente_id));
+            const nombreCliente = a.cliente_nombre || (cli ? (cli.nombre_comercial || cli.nombre || 'Cliente') : 'Cliente');
+            const fecha = a.fecha || a.fecha_salida || a.created_at || '2026-01-01';
+
+            return {
+              ...a,
+              cliente_nombre: nombreCliente,
+              cajasNum: Number(a.total_cajas) || 0,
+              kilosNum: parseFloat(a.total_kilos) || 0,
+              importeNum: parseFloat(a.total_importe || a.total || 0),
+              fechaStr: String(fecha).split('T')[0],
+              creadoPorVal: a.creado_por || 'Administrador',
+              repartidorVal: a.repartidor || 'Sin Asignar'
+            };
+          });
+
+        filtrarYOrdenarHistorico();
+
+      } catch (errGlobal) {
+        console.error("Error global histórico:", errGlobal);
+        document.getElementById('historicoBody').innerHTML = '<tr><td colspan="9" class="text-center py-8 text-rose-500 font-bold">Error de conexión al cargar el histórico.</td></tr>';
+      }
+    }
+
+    function setFiltroPeriodo(periodo) {
+      periodoFiltroActual = periodo;
+      document.getElementById('filtroFechaInput').value = '';
+
+      ['btnFiltroHoy', 'btnFiltroMes', 'btnFiltroAno', 'btnFiltroTodos'].forEach(id => {
+        document.getElementById(id).className = 'px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition';
+      });
+
+      if (periodo === 'hoy') document.getElementById('btnFiltroHoy').className = 'px-3 py-1.5 rounded-lg bg-blue-600 text-white shadow transition';
+      if (periodo === 'mes') document.getElementById('btnFiltroMes').className = 'px-3 py-1.5 rounded-lg bg-blue-600 text-white shadow transition';
+      if (periodo === 'ano') document.getElementById('btnFiltroAno').className = 'px-3 py-1.5 rounded-lg bg-blue-600 text-white shadow transition';
+      if (periodo === 'todos') document.getElementById('btnFiltroTodos').className = 'px-3 py-1.5 rounded-lg bg-blue-600 text-white shadow transition';
+
+      filtrarYOrdenarHistorico();
+    }
+
+    function aplicarFechaEspecifica() {
+      const fecha = document.getElementById('filtroFechaInput').value;
+      if (fecha) {
+        periodoFiltroActual = 'fecha_exacta';
+        ['btnFiltroHoy', 'btnFiltroMes', 'btnFiltroAno', 'btnFiltroTodos'].forEach(id => {
+          document.getElementById(id).className = 'px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition';
+        });
+        filtrarYOrdenarHistorico();
+      }
+    }
+
+    function filtrarYOrdenarHistorico() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      const repartidorFiltro = document.getElementById('filtroRepartidorSelect').value;
+      const criterio = document.getElementById('ordenSelect').value;
+      const fechaExacta = document.getElementById('filtroFechaInput').value;
+
+      const hoyStr = new Date().toISOString().split('T')[0];
+      const mesStr = hoyStr.substring(0, 7);
+      const anoStr = hoyStr.substring(0, 4);
+
+      let resultado = historicoRaw.filter(item => {
+        const coincideTexto = (item.numero_albaran && item.numero_albaran.toLowerCase().includes(query)) ||
+                              (item.cliente_nombre && item.cliente_nombre.toLowerCase().includes(query)) ||
+                              (item.creadoPorVal && item.creadoPorVal.toLowerCase().includes(query));
+
+        if (!coincideTexto) return false;
+
+        if (repartidorFiltro !== 'TODOS' && item.repartidorVal !== repartidorFiltro) {
+          return false;
+        }
+
+        if (periodoFiltroActual === 'hoy') return item.fechaStr === hoyStr;
+        if (periodoFiltroActual === 'mes') return item.fechaStr.startsWith(mesStr);
+        if (periodoFiltroActual === 'ano') return item.fechaStr.startsWith(anoStr);
+        if (periodoFiltroActual === 'fecha_exacta' && fechaExacta) return item.fechaStr === fechaExacta;
+
+        return true;
+      });
+
+      resultado.sort((a, b) => {
+        if (criterio === 'fecha_desc') return new Date(b.fechaStr) - new Date(a.fechaStr);
+        if (criterio === 'fecha_asc') return new Date(a.fechaStr) - new Date(b.fechaStr);
+        if (criterio === 'importe_desc') return b.importeNum - a.importeNum;
+        if (criterio === 'importe_asc') return a.importeNum - b.importeNum;
+        return 0;
+      });
+
+      actualizarMetricas(resultado);
+      renderizarTabla(resultado);
+    }
+
+    function actualizarMetricas(lista) {
+      const totalAlb = lista.length;
+      const totalCajas = lista.reduce((a, b) => a + b.cajasNum, 0);
+      const totalKilos = lista.reduce((a, b) => a + b.kilosNum, 0);
+      const totalImp = lista.reduce((a, b) => a + b.importeNum, 0);
+
+      document.getElementById('cardTotalAlbaranes').innerText = totalAlb;
+      document.getElementById('cardTotalCajas').innerText = totalCajas;
+      document.getElementById('cardTotalKilos').innerText = `${totalKilos.toFixed(2)} kg`;
+      document.getElementById('cardTotalFacturado').innerText = `${totalImp.toFixed(2)} €`;
+    }
+
+    function renderizarTabla(lista) {
+      const tbody = document.getElementById('historicoBody');
+      tbody.innerHTML = '';
+
+      if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-slate-400">No se encontraron albaranes para este filtro.</td></tr>';
+        return;
+      }
+
+      const rolActual = (sesionUsuario?.rol || 'ADMIN').toUpperCase();
+      const esAdminOJefe = (rolActual === 'ADMIN' || rolActual === 'SUPERADMIN');
+
+      lista.forEach(a => {
+        let celdaRepartidor = '';
+
+        if (esAdminOJefe) {
+          let optionsRepartidores = `<option value="Sin Asignar" ${a.repartidorVal === 'Sin Asignar' ? 'selected' : ''}>🛵 Sin Asignar</option>`;
+          usuariosEmpresa.forEach(u => {
+            const uNom = u.nombre || u.email;
+            const isSel = (a.repartidorVal === uNom) ? 'selected' : '';
+            optionsRepartidores += `<option value="${uNom}" ${isSel}>${uNom} (${(u.rol || 'COMERCIAL').toUpperCase()})</option>`;
+          });
+
+          celdaRepartidor = `
+            <select onchange="actualizarRepartidor('${a.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:outline-none">
+              ${optionsRepartidores}
+            </select>`;
+        } else {
+          celdaRepartidor = `<span class="text-xs font-bold text-slate-700">${a.repartidorVal}</span>`;
+        }
+
+        const isFacturado = a.estado === 'facturado';
+        const isAbonado = a.estado === 'abonado';
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-blue-50/40 transition">
+            <td class="p-3.5 font-mono font-bold text-blue-700">
+              ${a.numero_albaran || 'ALB-000'} ${a.modificado_en_ruta ? '<span class="text-amber-500 font-black">[*]</span>' : ''}
+            </td>
+            <td class="p-3.5 font-bold text-slate-900">${a.cliente_nombre}</td>
+            <td class="p-3.5 font-mono text-slate-500">${a.fechaStr}</td>
+            <td class="p-3.5 text-xs text-slate-600 font-semibold">
+              <span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                <i class="fa-solid fa-pen-nib text-[10px] text-blue-500 mr-1"></i>${a.creadoPorVal}
+              </span>
+            </td>
+            <td class="p-3.5">
+              ${celdaRepartidor}
+            </td>
+            <td class="p-3.5 text-center font-bold text-slate-700">${a.cajasNum} caj. / ${a.kilosNum.toFixed(2)} kg</td>
+            <td class="p-3.5 text-right font-extrabold text-emerald-600 font-mono">${a.importeNum.toFixed(2)} €</td>
+            <td class="p-3.5 text-center">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                isAbonado ? 'bg-rose-50 text-rose-700 border-rose-200' : (isFacturado ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-amber-50 text-amber-700 border-amber-200')
+              }">${a.estado || 'pendiente'}</span>
+            </td>
+            <td class="p-3.5 text-center space-x-1 whitespace-nowrap">
+              <button onclick="verAlbaranModal('${a.id}')" class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-xs transition border border-blue-200" title="Ver Albarán">
+                👁️
+              </button>
+              ${(esAdminOJefe && !isAbonado && !isFacturado) ? `
+                <button onclick="abrirModalAbono('${a.id}')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg text-xs transition border border-amber-200" title="Abonar / Rectificar">
+                  🔄
+                </button>
+              ` : ''}
+              ${(!isFacturado) ? `
+                <button onclick="eliminarAlbaranCompleto('${a.id}')" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg text-xs transition border border-rose-200" title="Eliminar Albarán y Cancelar Pedido">
+                  🗑️
+                </button>
+              ` : ''}
+            </td>
+          </tr>`;
+      });
+    }
+
+    async function eliminarAlbaranCompleto(albaranId) {
+      const alb = historicoRaw.find(a => String(a.id) === String(albaranId));
+      if (!alb) return;
+
+      if (alb.estado === 'facturado') {
+        alert("⛔ No se puede eliminar este albarán porque ya ha sido incluido en una factura oficial.");
+        return;
+      }
+
+      const numAlb = alb.numero_albaran || 'este albarán';
+      const cliente = alb.cliente_nombre || 'el cliente';
+
+      const confirmacion1 = confirm(`⚠️ ¿Estás SEGURO de que deseas eliminar por completo el albarán ${numAlb} de ${cliente}?`);
+      if (!confirmacion1) return;
+
+      const confirmacion2 = confirm(`🚨 ATENCIÓN: El albarán ${numAlb} será borrado permanentemente y los productos se reintegrarán automáticamente al stock de las cámaras. ¿Confirmar cancelación?`);
+      if (!confirmacion2) return;
+
+      try {
+        const empresaId = typeof getEmpresaIdActivo === 'function' ? getEmpresaIdActivo() : null;
+
+        // Recuperar líneas para reintegrar stock
+        const { data: lineas } = await db.from('lineas_albaran').select('*').eq('albaran_id', albaranId);
+
+        if (lineas && lineas.length > 0) {
+          for (const l of lineas) {
+            if (esUUID(l.producto_id) && !l.es_encargo && Number(l.cajas) > 0) {
+              const { data: prodData } = await db.from('productos').select('*').eq('id', l.producto_id).maybeSingle();
+              if (prodData) {
+                const stockCajasActual = Number(prodData.cajas_stock || 0);
+                const stockKilosActual = parseFloat(prodData.kilos_stock || 0);
+
+                await db.from('productos').update({
+                  cajas_stock: stockCajasActual + Number(l.cajas || 0),
+                  kilos_stock: stockKilosActual + parseFloat(l.kilos || 0)
+                }).eq('id', l.producto_id);
+              }
+            }
+          }
+        }
+
+        let qDelLin = db.from('lineas_albaran').delete().eq('albaran_id', albaranId);
+        if (esUUID(empresaId)) qDelLin = qDelLin.eq('empresa_id', empresaId);
+        await qDelLin;
+
+        let qDelAlb = db.from('albaranes').delete().eq('id', albaranId);
+        if (esUUID(empresaId)) qDelAlb = qDelAlb.eq('empresa_id', empresaId);
+        const { error: errDel } = await qDelAlb;
+
+        if (errDel) {
+          throw new Error("Error al borrar cabecera: " + errDel.message);
+        }
+
+        alert(`✅ Albarán ${numAlb} eliminado correctamente y stock de mercancía restaurado en el almacén.`);
+        await cargarHistorico();
+
+      } catch (err) {
+        alert("❌ Error al eliminar el albarán: " + err.message);
+      }
+    }
+
+    async function actualizarRepartidor(albaranId, nuevoRepartidor) {
+      const { error } = await db.from('albaranes').update({ repartidor: nuevoRepartidor }).eq('id', albaranId);
+      if (error) {
+        alert("⚠️ Error al actualizar el repartidor: " + error.message);
+      } else {
+        const alb = historicoRaw.find(a => String(a.id) === String(albaranId));
+        if (alb) alb.repartidorVal = nuevoRepartidor;
+      }
+    }
+
+    function abrirModalAbono(albaranId) {
+      const alb = historicoRaw.find(a => String(a.id) === String(albaranId));
+      if (!alb) return;
+
+      document.getElementById('abonoAlbaranId').value = alb.id;
+      document.getElementById('abonoNumAlb').innerText = alb.numero_albaran || 'ALB-000';
+      document.getElementById('abonoCliente').innerText = alb.cliente_nombre;
+      document.getElementById('abonoImporteOrig').innerText = alb.importeNum.toFixed(2) + ' €';
+      document.getElementById('modalAbono').classList.remove('hidden');
+      document.getElementById('modalAbono').classList.add('flex');
+    }
+
+    function cerrarModalAbono() {
+      document.getElementById('modalAbono').classList.add('hidden');
+      document.getElementById('modalAbono').classList.remove('flex');
+    }
+
+    async function confirmarAbonoAlbaran() {
+      const albaranId = document.getElementById('abonoAlbaranId').value;
+      const destinoStock = document.getElementById('abonoDestino').value;
+      const alb = historicoRaw.find(a => String(a.id) === String(albaranId));
+      if (!alb) return;
+
+      const empresaId = typeof getEmpresaIdActivo === 'function' ? getEmpresaIdActivo() : null;
+      const numRectificativa = `REC-2026-${Math.floor(Math.random() * 9000 + 1000)}`;
+      const fechaHoy = new Date().toISOString().split('T')[0];
+
+      const payloadRect = {
+        cliente_id: esUUID(alb.cliente_id) ? alb.cliente_id : null,
+        numero_factura: numRectificativa,
+        tipo: 'rectificativa',
+        fecha: fechaHoy,
+        total_importe: -Math.abs(alb.importeNum),
+        total_factura: -Math.abs(alb.importeNum),
+        total: -Math.abs(alb.importeNum),
+        estado: 'emitida'
+      };
+
+      if (esUUID(empresaId)) payloadRect.empresa_id = empresaId;
+
+      const { error: errRec } = await db.from('facturas').insert([payloadRect]);
+
+      if (errRec) return alert("Error emitiendo rectificativa: " + errRec.message);
+
+      if (destinoStock === 'REINTEGRAR') {
+        const { data: lineas } = await db.from('lineas_albaran').select('*').eq('albaran_id', albaranId);
+        if (lineas && lineas.length > 0) {
+          for (const l of lineas) {
+            if (esUUID(l.producto_id) && !l.es_encargo) {
+              const { data: prodData } = await db.from('productos').select('*').eq('id', l.producto_id).maybeSingle();
+              if (prodData) {
+                const stockActualCajas = Number(prodData.cajas_stock || 0);
+                const stockActualKilos = Number(prodData.kilos_stock || 0);
+
+                await db.from('productos').update({
+                  cajas_stock: stockActualCajas + Math.abs(Number(l.cajas) || 0),
+                  kilos_stock: stockActualKilos + Math.abs(Number(l.kilos) || 0)
+                }).eq('id', l.producto_id);
+              }
+            }
+          }
+        }
+      }
+
+      await db.from('albaranes').update({ estado: 'abonado' }).eq('id', albaranId);
+
+      alert(`✅ ¡Abono procesado con éxito! Factura Rectificativa: ${numRectificativa}.`);
+      cerrarModalAbono();
+      await cargarHistorico();
+    }
+
+    // CONSULTA DIRECTA Y REACTIVA DE LÍNEAS
+    async function verAlbaranModal(albaranId) {
+      const alb = historicoRaw.find(a => String(a.id) === String(albaranId));
+      if (!alb) return;
+
+      document.getElementById('vEmpresaNombre').innerText = nombreEmpresaActivo;
+      const imgLogo = document.getElementById('vEmpresaLogo');
+      if (logoEmpresaUrl) {
+        imgLogo.src = logoEmpresaUrl;
+        imgLogo.classList.remove('hidden');
+      } else {
+        imgLogo.classList.add('hidden');
+      }
+
+      document.getElementById('vNumAlbaran').innerText = (alb.numero_albaran || 'ALB-000') + (alb.modificado_en_ruta ? ' [*]' : '');
+      document.getElementById('vFecha').innerText = 'Fecha: ' + alb.fechaStr;
+      document.getElementById('vCliente').innerText = alb.cliente_nombre;
+      document.getElementById('vCreadoPor').innerText = 'Emitido por: ' + alb.creadoPorVal;
+      document.getElementById('vRepartidor').innerText = alb.repartidorVal;
+      document.getElementById('vTotalCajas').innerText = alb.cajasNum;
+      document.getElementById('vTotalKilos').innerText = alb.kilosNum.toFixed(2) + ' kg';
+      document.getElementById('vTotalImporte').innerText = alb.importeNum.toFixed(2) + ' €';
+
+      const tbody = document.getElementById('vTablaBody');
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center p-3 text-slate-400">Cargando productos...</td></tr>';
+
+      // Recuperar líneas directamente de Supabase (por ID o por número de albarán)
+      let lineas = [];
+      const { data: lineasPorId } = await db.from('lineas_albaran').select('*').eq('albaran_id', alb.id);
+
+      if (lineasPorId && lineasPorId.length > 0) {
+        lineas = lineasPorId;
+      } else if (alb.numero_albaran) {
+        const { data: lineasPorNum } = await db.from('lineas_albaran').select('*').eq('numero_albaran', alb.numero_albaran);
+        if (lineasPorNum) lineas = lineasPorNum;
+      }
+
+      tbody.innerHTML = '';
+      let acumTara = 0;
+
+      if (lineas && lineas.length > 0) {
+        lineas.forEach(l => {
+          const nombreProd = l.producto_nombre || l.nombre || productosMap[l.producto_id] || 'Producto';
+          const lote = l.lote || (l.es_encargo ? 'COMPRA-DIA' : 'LOT-2026-GENERAL');
+          const cajas = Number(l.cajas || 0);
+          const kilosNetos = parseFloat(l.kilos || 0);
+          const precio = parseFloat(l.precio_kg || 0);
+          const subtotal = parseFloat(l.subtotal || (kilosNetos * precio));
+          
+          const taraTotal = parseFloat(l.tara_total_kg || (cajas * parseFloat(l.tara_caja_kg || 0)) || 0);
+          acumTara += taraTotal;
+          const bruto = parseFloat(l.kilos_brutos || (kilosNetos + taraTotal));
+          const esFuera = l.es_encargo === true || String(l.producto_id || '').startsWith('encargo');
+
+          tbody.innerHTML += `
+            <tr class="border-b border-slate-100">
+              <td class="p-2 sm:p-2.5 font-bold text-slate-800">
+                ${esFuera ? '<span class="text-[8.5px] bg-amber-100 text-amber-900 px-1 py-0.5 rounded font-black mr-1">🛒 FUERA</span>' : ''}
+                ${nombreProd}
+              </td>
+              <td class="p-2 sm:p-2.5 font-mono text-slate-500 text-[11px]">${lote}</td>
+              <td class="p-2 sm:p-2.5 text-center font-semibold">${cajas}</td>
+              <td class="p-2 sm:p-2.5 text-center font-mono text-slate-600">${bruto.toFixed(2)} kg</td>
+              <td class="p-2 sm:p-2.5 text-center font-mono text-amber-800 font-bold">-${taraTotal.toFixed(2)} kg</td>
+              <td class="p-2 sm:p-2.5 text-center font-mono font-black text-slate-900 bg-slate-50">${kilosNetos.toFixed(2)} kg</td>
+              <td class="p-2 sm:p-2.5 text-right font-semibold font-mono">${precio.toFixed(2)} €</td>
+              <td class="p-2 sm:p-2.5 text-right font-black font-mono ${subtotal < 0 ? 'text-rose-600' : 'text-blue-700'}">${subtotal.toFixed(2)} €</td>
+            </tr>`;
+        });
+      } else {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center p-4 text-slate-400">Sin productos en este albarán.</td></tr>`;
+      }
+
+      document.getElementById('vTotalTara').innerText = `${acumTara.toFixed(2)} kg`;
+
+      const firmaImg = document.getElementById('vImgFirmaHist');
+      const textoSinFirma = document.getElementById('vTextoSinFirma');
+      const firmaGuardada = alb.firma_digital || alb.firma_cliente;
+
+      if (firmaGuardada) {
+        firmaImg.src = firmaGuardada;
+        firmaImg.classList.remove('hidden');
+        textoSinFirma.classList.add('hidden');
+      } else {
+        firmaImg.classList.add('hidden');
+        textoSinFirma.classList.remove('hidden');
+      }
+
+      document.getElementById('modalVisor').classList.remove('hidden');
+      document.getElementById('modalVisor').classList.add('flex');
+    }
+
+    function cerrarVisor() { 
+      document.getElementById('modalVisor').classList.add('hidden'); 
+      document.getElementById('modalVisor').classList.remove('flex');
+    }
+  </script>
+</body>
+</html>
