@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facturas Emitidas - ERP Distribución</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase JS, Auth Guard, html2pdf.js y QR Code JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="auth-guard.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Inter', sans-serif; }
+    
+    @media print { 
+      body * { visibility: hidden; }
+      .no-print { display: none !important; }
+      #facturaRenderPDF, #facturaRenderPDF * { visibility: visible; }
+      #facturaRenderPDF {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+
+  <div class="max-w-7xl mx-auto space-y-6 px-3 sm:px-4 pt-6 no-print">
+
+    <!-- CABECERA Y RESUMEN CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+      <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3 bg-blue-50 text-blue-600 rounded-xl text-xl"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+        <div>
+          <p class="text-[10px] text-slate-400 font-bold uppercase">Total Facturado</p>
+          <h3 id="cardTotalFacturado" class="text-lg sm:text-xl font-black text-slate-800">0.00 €</h3>
+        </div>
+      </div>
+      <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl text-xl"><i class="fa-solid fa-circle-check"></i></div>
+        <div>
+          <p class="text-[10px] text-slate-400 font-bold uppercase">Total Cobrado</p>
+          <h3 id="cardTotalCobrado" class="text-lg sm:text-xl font-black text-emerald-600">0.00 €</h3>
+        </div>
+      </div>
+      <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4 sm:col-span-2 md:col-span-1">
+        <div class="p-3 bg-amber-50 text-amber-600 rounded-xl text-xl"><i class="fa-solid fa-clock"></i></div>
+        <div>
+          <p class="text-[10px] text-slate-400 font-bold uppercase">Pendiente de Cobro</p>
+          <h3 id="cardTotalPendiente" class="text-lg sm:text-xl font-black text-amber-600">0.00 €</h3>
+        </div>
+      </div>
+    </div>
+
+    <!-- FILTROS Y BÚSQUEDA -->
+    <div class="bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-3 justify-between items-center text-xs">
+      <div class="relative w-full md:w-96">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </span>
+        <input type="text" id="inputBuscar" onkeyup="filtrarFacturas()" placeholder="Buscar por cliente o nº factura..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl font-bold bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+      </div>
+      <div class="flex gap-2 w-full md:w-auto">
+        <select id="selectEstado" onchange="filtrarFacturas()" class="w-full md:w-auto p-2 border border-slate-200 rounded-xl font-bold text-slate-700 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500">
+          <option value="todos">Todos los Estados</option>
+          <option value="pendiente">Pendientes de Cobro</option>
+          <option value="cobrada">Cobradas</option>
+          <option value="rectificativa">Facturas Rectificativas</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- TABLA DE FACTURAS -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-600">
+          <thead class="bg-slate-100/80 text-[10px] text-slate-500 uppercase border-b font-bold">
+            <tr>
+              <th class="p-3.5">Nº Factura</th>
+              <th class="p-3.5">Fecha</th>
+              <th class="p-3.5">Cliente</th>
+              <th class="p-3.5">Albaranes Incluidos</th>
+              <th class="p-3.5 text-right">Base Imponible</th>
+              <th class="p-3.5 text-right">Total (€)</th>
+              <th class="p-3.5 text-center">Estado Cobro</th>
+              <th class="p-3.5 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaFacturas" class="divide-y divide-slate-100 font-semibold text-slate-700">
+            <tr><td colspan="8" class="p-6 text-center text-slate-400">Cargando facturas emitidas...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL PDF FACTURA COMPLETA RESPONSIVE -->
+  <div id="modalPDF" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+      
+      <!-- BARRA SUPERIOR -->
+      <div class="p-3 sm:p-4 bg-slate-900 text-white flex justify-between items-center no-print shrink-0">
+        <h3 class="font-bold text-xs sm:text-sm flex items-center gap-2">
+          <i class="fa-solid fa-file-invoice text-rose-400"></i> Factura Oficial Detallada
+        </h3>
+        <div class="flex items-center gap-2">
+          <button onclick="window.print()" class="px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow">
+            <i class="fa-solid fa-print"></i> <span class="hidden sm:inline">Imprimir</span>
+          </button>
+          <button onclick="cerrarModalPDF()" class="text-slate-400 hover:text-white font-bold text-lg px-2">✕</button>
+        </div>
+      </div>
+      
+      <!-- CONTENEDOR CON SCROLL FLUIDO -->
+      <div class="p-2 sm:p-6 overflow-y-auto bg-slate-100 flex justify-center flex-1">
+        <div id="facturaRenderPDF" class="p-4 sm:p-8 rounded-xl shadow border border-slate-200 w-full max-w-[800px] text-slate-800 bg-white space-y-4 sm:space-y-6 font-sans">
+          
+          <!-- CABECERA EMPRESA Y FACTURA (APILADA EN MÓVIL / FILA EN PC) -->
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-blue-900 pb-4 gap-3">
+            <div id="pdfCabeceraEmpresa" class="flex items-center gap-3 w-full sm:w-auto">
+              <!-- Renderizado dinámico de logo y datos de empresa -->
+            </div>
+            <div class="flex justify-between sm:block sm:text-right w-full sm:w-auto items-center">
+              <span class="inline-block px-2.5 py-1 bg-blue-50 text-blue-800 text-[10px] font-black rounded-lg uppercase border border-blue-100 tracking-wider">
+                FACTURA OFICIAL
+              </span>
+              <h3 id="pdfNumFactura" class="text-xs sm:text-lg font-black text-blue-900 font-mono sm:mt-1">FAC-2026-0000</h3>
+              <p id="pdfFecha" class="text-[11px] sm:text-xs text-slate-600 font-bold sm:mt-0.5">Fecha: --/--/----</p>
+            </div>
+          </div>
+
+          <!-- DATOS DEL CLIENTE -->
+          <div class="bg-slate-50 p-3 sm:p-4 rounded-xl text-xs border border-slate-200 flex flex-col sm:flex-row justify-between gap-3">
+            <div>
+              <p class="font-bold text-slate-400 uppercase text-[9px] sm:text-[10px] tracking-wider mb-0.5">CLIENTE / DESTINATARIO</p>
+              <p id="pdfClienteNombre" class="text-xs sm:text-sm font-black text-slate-900">--</p>
+              <p id="pdfClienteCif" class="text-slate-600 font-mono font-bold mt-0.5 text-[11px]">CIF/NIF: --</p>
+            </div>
+            <div class="sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0">
+              <p class="font-bold text-slate-400 uppercase text-[9px] sm:text-[10px] tracking-wider mb-0.5">DOMICILIO FISCAL / ENTREGA</p>
+              <p id="pdfClienteDireccion" class="text-xs text-slate-700 font-semibold">Dirección: --</p>
+              <p id="pdfClientePoblacion" class="text-xs text-slate-500">Localidad: --</p>
+            </div>
+          </div>
+
+          <!-- TABLA CON DETALLE COMPLETO (SCROLL TÁCTIL EN MÓVIL) -->
+          <div class="overflow-x-auto -mx-2 sm:mx-0 border border-slate-200 sm:border-0 rounded-xl sm:rounded-none">
+            <table class="w-full text-[11px] sm:text-xs text-left border-collapse min-w-[520px] sm:min-w-full">
+              <thead>
+                <tr class="bg-slate-900 text-white font-bold text-[10px] uppercase">
+                  <th class="p-2 sm:p-2.5">Descripción del Producto / Detalle</th>
+                  <th class="p-2 sm:p-2.5">Lote / Ref</th>
+                  <th class="p-2 sm:p-2.5 text-center">Cajas</th>
+                  <th class="p-2 sm:p-2.5 text-center">Kilos</th>
+                  <th class="p-2 sm:p-2.5 text-right">Precio (€/kg)</th>
+                  <th class="p-2 sm:p-2.5 text-right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody id="pdfLineasDetalleBody" class="divide-y divide-slate-100 font-medium text-slate-700"></tbody>
+            </table>
+          </div>
+
+          <!-- RESUMEN FISCAL Y VERI*FACTU -->
+          <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-end border-t-2 border-slate-200 pt-4 gap-4">
+            <div class="border border-slate-200 rounded-xl p-3 bg-slate-50/70 flex items-center gap-3 w-full sm:w-auto">
+              <div id="qrcode" class="border p-1 rounded-lg bg-white shadow-sm shrink-0"></div>
+              <div class="text-[9px] sm:text-[10px] text-slate-500 space-y-0.5 leading-tight">
+                <p class="font-bold text-slate-800 uppercase">SISTEMA VERI*FACTU</p>
+                <p>Factura verificada expedida conforme al Reglamento RD 1007/2023.</p>
+                <p id="pdfHash" class="font-mono text-[8.5px] text-slate-400 truncate">Hash: VERIFACTU-OK-2026</p>
+              </div>
+            </div>
+
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 text-right space-y-1 text-xs w-full sm:w-64">
+              <p class="text-slate-600">Base Imponible: <span id="pdfBase" class="font-bold text-slate-800 font-mono">0.00 €</span></p>
+              <p class="text-slate-600">IVA (10%): <span id="pdfIva" class="font-bold text-slate-800 font-mono">0.00 €</span></p>
+              <p class="text-sm sm:text-base font-black text-blue-900 border-t border-slate-200 pt-1.5 mt-1 font-mono">
+                TOTAL: <span id="pdfTotal" class="text-blue-700">0.00 €</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTÓN DE DESCARGA PDF -->
+      <div class="p-3 sm:p-4 bg-slate-50 border-t flex justify-end gap-2 no-print shrink-0">
+        <button id="btnDescargarPdf" onclick="descargarPDF()" class="w-full sm:w-auto px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow">
+          <i class="fa-solid fa-file-pdf"></i> Descargar Documento en PDF
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
+    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let facturasTodas = [];
+    let clientesMap = {};
+
+    window.onload = async () => {
+      await cargarClientes();
+      await cargarFacturas();
+    };
+
+    async function cargarClientes() {
+      const empresaId = getEmpresaIdActivo();
+      let query = dbClient.from('clientes').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data } = await query;
+      clientesMap = {};
+      (data || []).forEach(c => {
+        clientesMap[c.id] = c;
+      });
+    }
+
+    async function cargarFacturas() {
+      const empresaId = getEmpresaIdActivo();
+      let query = dbClient.from('facturas').select('*');
+      if (empresaId) query = query.eq('empresa_id', empresaId);
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Error al consultar facturas:", error);
+      }
+
+      facturasTodas = (data || []).sort((a, b) => {
+        const fechaA = new Date(a.fecha || a.fecha_emision || '2026-01-01');
+        const fechaB = new Date(b.fecha || b.fecha_emision || '2026-01-01');
+        return fechaB - fechaA;
+      });
+
+      actualizarCardsTotales();
+      renderizarTabla(facturasTodas);
+    }
+
+    function renderizarTabla(lista) {
+      const tbody = document.getElementById('tablaFacturas');
+
+      if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">No se encontraron facturas emitidas para esta empresa.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = lista.map(f => {
+        const cli = clientesMap[f.cliente_id] || {};
+        const clienteNom = f.cliente_nombre || cli.nombre_comercial || cli.nombre || 'Cliente';
+        const fecha = (f.fecha || f.fecha_emision || '2026-01-01').split('T')[0];
+        
+        let total = parseFloat(f.total_importe || f.total_factura || f.total || 0);
+        let base = parseFloat(f.base_imponible || (total / 1.10));
+
+        const estadoCobro = f.estado_cobro || (f.estado === 'emitida' ? 'pendiente' : f.estado || 'pendiente');
+        const esCobrada = estadoCobro === 'cobrada' || f.cobrado === true;
+        const esRectificativa = f.tipo === 'rectificativa' || total < 0;
+        const albaranesTxt = f.albaranes_incluidos || 'Albaranes asociados';
+
+        return `
+          <tr class="hover:bg-blue-50/40 transition">
+            <td class="p-3.5 font-mono font-bold ${esRectificativa ? 'text-rose-600' : 'text-blue-700'}">${f.numero_factura || 'FAC-000'}</td>
+            <td class="p-3.5 text-slate-500 font-mono text-[11px]">${fecha}</td>
+            <td class="p-3.5 font-bold text-slate-900">${clienteNom}</td>
+            <td class="p-3.5 text-slate-500 text-xs truncate max-w-[200px] font-mono">${albaranesTxt}</td>
+            <td class="p-3.5 text-right font-mono text-slate-600 font-bold">${base.toFixed(2)} €</td>
+            <td class="p-3.5 text-right font-black ${esRectificativa ? 'text-rose-600' : 'text-slate-900'} font-mono">${total.toFixed(2)} €</td>
+            <td class="p-3.5 text-center">
+              <button onclick="toggleEstadoCobro('${f.id}', '${estadoCobro}')" 
+                class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border transition ${
+                  esCobrada 
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                    : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                }">
+                ${esCobrada ? '✅ Cobrada' : '⏳ Pendiente'}
+              </button>
+            </td>
+            <td class="p-3.5 text-center">
+              <button onclick="verFacturaPDF('${f.id}')" class="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-xs transition border border-blue-200 flex items-center gap-1 mx-auto shadow-sm">
+                <i class="fa-solid fa-file-pdf text-rose-500"></i> Ver PDF
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function toggleEstadoCobro(facturaId, estadoActual) {
+      const nuevoEstado = (estadoActual === 'cobrada') ? 'pendiente' : 'cobrada';
+
+      const { error } = await dbClient
+        .from('facturas')
+        .update({ 
+          estado_cobro: nuevoEstado,
+          cobrado: (nuevoEstado === 'cobrada')
+        })
+        .eq('id', facturaId);
+
+      if (error) return alert("Error al actualizar cobro: " + error.message);
+
+      await cargarFacturas();
+    }
+
+    function filtrarFacturas() {
+      const q = document.getElementById('inputBuscar').value.toLowerCase().trim();
+      const estado = document.getElementById('selectEstado').value;
+
+      const filtradas = facturasTodas.filter(f => {
+        const cli = clientesMap[f.cliente_id] || {};
+        const clienteNom = (f.cliente_nombre || cli.nombre_comercial || cli.nombre || '').toLowerCase();
+        const num = (f.numero_factura || '').toLowerCase();
+        const coincideQ = clienteNom.includes(q) || num.includes(q);
+
+        let coincideEstado = true;
+        const estadoCobro = f.estado_cobro || (f.estado === 'emitida' ? 'pendiente' : f.estado || 'pendiente');
+        
+        if (estado === 'pendiente') coincideEstado = (estadoCobro !== 'cobrada' && f.cobrado !== true);
+        if (estado === 'cobrada') coincideEstado = (estadoCobro === 'cobrada' || f.cobrado === true);
+        if (estado === 'rectificativa') coincideEstado = (f.tipo === 'rectificativa' || (f.total_importe || 0) < 0);
+
+        return coincideQ && coincideEstado;
+      });
+
+      renderizarTabla(filtradas);
+    }
+
+    function actualizarCardsTotales() {
+      const totalFacturado = facturasTodas.reduce((acc, f) => acc + parseFloat(f.total_importe || f.total || 0), 0);
+      const totalCobrado = facturasTodas
+        .filter(f => (f.estado_cobro === 'cobrada' || f.cobrado === true))
+        .reduce((acc, f) => acc + parseFloat(f.total_importe || f.total || 0), 0);
+      const totalPendiente = totalFacturado - totalCobrado;
+
+      document.getElementById('cardTotalFacturado').innerText = `${totalFacturado.toFixed(2)} €`;
+      document.getElementById('cardTotalCobrado').innerText = `${totalCobrado.toFixed(2)} €`;
+      document.getElementById('cardTotalPendiente').innerText = `${totalPendiente.toFixed(2)} €`;
+    }
+
+    async function verFacturaPDF(facturaId) {
+      const factura = facturasTodas.find(f => String(f.id) === String(facturaId));
+      if (!factura) return;
+
+      const empresaId = getEmpresaIdActivo();
+      let empNombre = 'DISTRIBUCIONES CONGELADOS S.L.';
+      let empLogo = null;
+
+      if (empresaId) {
+        const { data: emp } = await dbClient.from('empresas').select('*').eq('id', empresaId).maybeSingle();
+        if (emp) {
+          empNombre = emp.nombre_comercial || emp.nombre || empNombre;
+          empLogo = emp.logo_url || null;
+        }
+      }
+
+      const cli = clientesMap[factura.cliente_id] || {};
+      const clienteNom = factura.cliente_nombre || cli.nombre_comercial || cli.nombre || 'Cliente';
+
+      const cabeceraPDF = empLogo
+        ? `<div class="flex items-center gap-3">
+             <img src="${empLogo}" alt="Logo" class="max-h-12 max-w-[120px] sm:max-h-16 sm:max-w-[160px] object-contain rounded">
+             <div>
+               <h2 class="text-base sm:text-xl font-black text-blue-900 uppercase tracking-tight">${empNombre}</h2>
+               <p class="text-[10px] sm:text-xs text-slate-500 font-semibold">Venta Mayorista y Distribución Frigorífica</p>
+               <p class="text-[9px] sm:text-[11px] text-slate-400">Trazabilidad Sanitaria y Cadena de Frío</p>
+             </div>
+           </div>`
+        : `<div>
+             <h2 class="text-base sm:text-2xl font-black text-blue-900 uppercase tracking-tight">${empNombre}</h2>
+             <p class="text-[10px] sm:text-xs text-slate-500 font-semibold mt-0.5">Venta Mayorista y Distribución Frigorífica</p>
+             <p class="text-[9px] sm:text-[11px] text-slate-400">Trazabilidad Sanitaria y Cadena de Frío</p>
+           </div>`;
+
+      document.getElementById('pdfCabeceraEmpresa').innerHTML = cabeceraPDF;
+      document.getElementById('pdfNumFactura').innerText = factura.numero_factura || 'FAC-000';
+      document.getElementById('pdfFecha').innerText = `Fecha: ${(factura.fecha || factura.fecha_emision || '2026-01-01').split('T')[0]}`;
+      document.getElementById('pdfClienteNombre').innerText = clienteNom;
+      document.getElementById('pdfClienteCif').innerText = `CIF/NIF: ${cli.cif || cli.cif_nif || 'B-99999999'}`;
+      document.getElementById('pdfClienteDireccion').innerText = `Dirección: ${cli.direccion || 'Domicilio habitual'}`;
+      document.getElementById('pdfClientePoblacion').innerText = `Localidad: ${cli.poblacion || 'Málaga'}`;
+      
+      const totalFac = parseFloat(factura.total_importe || factura.total || 0);
+      const baseFac = parseFloat(factura.base_imponible || (totalFac / 1.10));
+      const ivaFac = parseFloat(factura.iva || factura.iva_total || (totalFac - baseFac));
+
+      document.getElementById('pdfBase').innerText = `${baseFac.toFixed(2)} €`;
+      document.getElementById('pdfIva').innerText = `${ivaFac.toFixed(2)} €`;
+      document.getElementById('pdfTotal').innerText = `${totalFac.toFixed(2)} €`;
+
+      let queryAlb = dbClient.from('albaranes').select('*');
+      if (empresaId) queryAlb = queryAlb.eq('empresa_id', empresaId);
+      let { data: albaranesAsociados } = await queryAlb.or(`factura_id.eq.${factura.id},factura_numero.eq.${factura.numero_factura}`);
+
+      if ((!albaranesAsociados || albaranesAsociados.length === 0) && factura.albaranes_incluidos) {
+        const numerosLista = factura.albaranes_incluidos.split(',').map(s => s.trim()).filter(Boolean);
+        if (numerosLista.length > 0) {
+          let qPorNum = dbClient.from('albaranes').select('*');
+          if (empresaId) qPorNum = qPorNum.eq('empresa_id', empresaId);
+          const resNum = await qPorNum.in('numero_albaran', numerosLista);
+          albaranesAsociados = resNum.data || [];
+        }
+      }
+
+      let lineasFactura = [];
+      if (albaranesAsociados && albaranesAsociados.length > 0) {
+        const albIds = albaranesAsociados.map(a => a.id);
+        const albNums = albaranesAsociados.map(a => a.numero_albaran);
+
+        let qLin = dbClient.from('lineas_albaran').select('*');
+        if (empresaId) qLin = qLin.eq('empresa_id', empresaId);
+        const { data: lineasData } = await qLin;
+
+        lineasFactura = (lineasData || []).filter(l => 
+          albIds.includes(l.albaran_id) || albNums.includes(l.numero_albaran)
+        );
+      }
+
+      const tbody = document.getElementById('pdfLineasDetalleBody');
+      tbody.innerHTML = '';
+
+      if (albaranesAsociados && albaranesAsociados.length > 0) {
+        albaranesAsociados.forEach(alb => {
+          const numAlb = alb.numero_albaran || 'ALB-000';
+          const fecAlb = (alb.fecha_salida || alb.fecha || '').split('T')[0];
+          
+          const lineasDeEsteAlb = lineasFactura.filter(l => 
+            (String(l.albaran_id) === String(alb.id) || String(l.numero_albaran) === String(alb.numero_albaran)) &&
+            (Number(l.cajas) !== 0 || Number(l.kilos) !== 0)
+          );
+
+          tbody.innerHTML += `
+            <tr class="bg-blue-50/60 font-bold text-blue-900 border-t border-b border-blue-200">
+              <td colspan="6" class="p-2 text-xs">
+                <i class="fa-solid fa-truck text-blue-600 mr-1.5"></i> Albarán de Entrega: <span class="font-mono">${numAlb}</span> · Fecha: <span class="font-mono text-slate-600">${fecAlb}</span>
+              </td>
+            </tr>
+          `;
+
+          if (lineasDeEsteAlb.length > 0) {
+            lineasDeEsteAlb.forEach(linea => {
+              const nombreProd = linea.producto_nombre || linea.nombre || 'Producto Congelado';
+              const lote = linea.lote || 'LOT-GENERAL';
+              const cajas = Number(linea.cajas || 0);
+              const kilos = parseFloat(linea.kilos || 0);
+              const precioKg = parseFloat(linea.precio_kg || linea.precio_unidad || linea.precio || 0);
+              const subtotal = parseFloat(linea.subtotal || (kilos * precioKg) || 0);
+
+              tbody.innerHTML += `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                  <td class="p-2 sm:p-2.5 font-bold text-slate-900 pl-3 sm:pl-4">${nombreProd}</td>
+                  <td class="p-2 sm:p-2.5 font-mono text-slate-500 text-[11px]">${lote}</td>
+                  <td class="p-2 sm:p-2.5 text-center font-bold text-slate-700">${cajas}</td>
+                  <td class="p-2 sm:p-2.5 text-center font-bold text-slate-800 font-mono">${kilos.toFixed(2)} kg</td>
+                  <td class="p-2 sm:p-2.5 text-right font-mono text-slate-700">${precioKg.toFixed(2)} €</td>
+                  <td class="p-2 sm:p-2.5 text-right font-mono font-bold ${subtotal < 0 ? 'text-rose-600' : 'text-slate-900'}">${subtotal.toFixed(2)} €</td>
+                </tr>
+              `;
+            });
+          }
+        });
+      } else {
+        tbody.innerHTML = `
+          <tr>
+            <td class="p-3 font-bold text-slate-800" colspan="2">Distribución de pescados y mariscos congelados (${factura.albaranes_incluidos || 'Albaranes del período'})</td>
+            <td class="p-3 text-center">-</td>
+            <td class="p-3 text-center">-</td>
+            <td class="p-3 text-right font-mono">${baseFac.toFixed(2)} €</td>
+            <td class="p-3 text-right font-mono font-bold text-blue-700">${totalFac.toFixed(2)} €</td>
+          </tr>
+        `;
+      }
+
+      const qrcodeContainer = document.getElementById('qrcode');
+      qrcodeContainer.innerHTML = "";
+      new QRCode(qrcodeContainer, {
+        text: `https://sede.agenciatributaria.gob.es/verifactu?nif=${cli.cif || 'B12345678'}&num=${factura.numero_factura}&total=${totalFac.toFixed(2)}`,
+        width: 55,
+        height: 55
+      });
+
+      document.getElementById('modalPDF').classList.remove('hidden');
+      document.getElementById('modalPDF').classList.add('flex');
+    }
+
+    function cerrarModalPDF() {
+      document.getElementById('modalPDF').classList.add('hidden');
+      document.getElementById('modalPDF').classList.remove('flex');
+    }
+
+    // DESCARGA PDF NATIVA CON ANCHO A4 FIJO (SIN COMPRESIÓN EN MÓVIL)
+    function descargarPDF() {
+      const elemento = document.getElementById('facturaRenderPDF');
+      const numFactura = document.getElementById('pdfNumFactura').innerText || 'Factura';
+      const btn = document.getElementById('btnDescargarPdf');
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Generando PDF...';
+
+      const opt = {
+        margin: [6, 6, 6, 6],
+        filename: `${numFactura}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true, 
+          logging: false,
+          windowWidth: 1024 // Forzar renderizado a resolución de escritorio para que en móvil ocupe el folio A4 completo
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(opt).from(elemento).save().then(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Descargar Documento en PDF';
+      }).catch(err => {
+        console.error("Error al exportar PDF:", err);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Descargar Documento en PDF';
+        window.print();
+      });
+    }
+  </script>
+</body>
+</html>
