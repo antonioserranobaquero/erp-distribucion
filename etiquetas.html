@@ -6,11 +6,13 @@
   <title>Diseñador Modular de Etiquetas - ERP Distribución</title>
 
   <!-- Tailwind CSS & FontAwesome -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <!-- Supabase JS Client & Auth Guard -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <!-- Google Fonts -->
@@ -87,7 +89,7 @@
           <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
             <div class="sm:col-span-6 relative">
               <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cargar Producto</label>
-              <input type="text" id="inputBuscarProd" placeholder="🔍 Escribe para buscar..." oninput="filtrarProductos()" onfocus="filtrarProductos()" autocomplete="off" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800">
+              <input type="text" id="inputBuscarProd" placeholder="🔍 Escribe para buscar..." oninput="ERP.scheduleSearch(this, filtrarProductos)" onfocus="filtrarProductos()" autocomplete="off" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800">
               <div id="dlProds" class="hidden absolute z-50 w-full bg-white border border-slate-300 rounded-xl shadow-xl max-h-52 overflow-y-auto mt-1 divide-y divide-slate-100"></div>
             </div>
 
@@ -153,9 +155,7 @@
   <div id="contenedorImpresionReal" class="hidden"></div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const dbClient = ERP.getClient();
 
     let productosLista = [];
     let tipoImpresora = 'termica';
@@ -388,7 +388,7 @@
           `;
         }
 
-        cont.innerHTML += htmlBloque;
+        cont.insertAdjacentHTML('beforeend', htmlBloque);
       });
     }
 

@@ -1,46 +1,25 @@
-# 🐟 ERP SaaS Integral - Distribución Comercial de Pescados y Congelados
+# ERP Distribución
 
-Sistema web y PWA multiplataforma para la gestión integral de albaranes, facturación oficial Veri*Factu, trazabilidad por lotes, control de riesgo de clientes y rutas de reparto con firma digital táctil.
+Aplicación estática para la gestión de distribución, con Supabase como backend.
 
----
+## Versión optimizada — septiembre de 2026
 
-## 🚀 Módulos del Sistema
+- Panel con agregados calculados en servidor.
+- CSS compilado y utilidades compartidas de datos y sesión.
+- Índices y consultas revisados sobre el esquema real.
+- Albaranes y traslados de almacén transaccionales.
+- Pruebas automatizadas y registro de migraciones.
 
-| Archivo | Módulo / Función |
-| :--- | :--- |
-| **`index.html`** | Dashboard principal, KPIs de negocio y accesos rápidos. |
-| **`albaranes.html`** | Emisión agilizada de albaranes con sugerencias FIFO. |
-| **`historico.html`** | Histórico de entregas, reimpresión y generación de PDF A4. |
-| **`rutas.html`** | Hoja de ruta de carga de camiones con ordenación Drag & Drop. |
-| **`repartidor.html`** | App PWA móvil para choferes con firma digital táctil. |
-| **`facturas.html`** | Facturación agrupada Veri*Factu con huella SHA-256. |
-| **`almacen.html`** | Control de stock, lotes, caducidades y mermas. |
-| **`etiquetas.html`** | Impresión de etiquetas térmicas de trazabilidad alimentaria. |
-| **`compras.html`** | Entradas de mercancía de proveedores y lonja. |
-| **`clientes.html`** | Fichas comerciales y control de límite de riesgo de deuda. |
-| **`estadisticas.html`** | Analítica de ventas, coste de compras y beneficio neto. |
-| **`configuracion.html`**| Datos fiscales de la empresa, series e impuestos. |
+Consulta [el informe de optimización](INFORME_OPTIMIZACION.md) para conocer cambios, medidas, pruebas y problemas pendientes. La autenticación heredada y el aislamiento multiempresa en la base de datos **todavía requieren una migración de seguridad**. Esta versión no certifica cumplimiento fiscal ni una PWA offline completa.
 
----
+## Servir la aplicación
 
-## 🛠️ Requisitos e Infraestructura
+Publicar la raíz del proyecto en un servidor estático HTTPS. La entrada es login.html y el panel es index.html. Los nombres deben terminar en una sola extensión .html.
 
-1. **Base de Datos:** Cloud PostgreSQL en [Supabase](https://supabase.com).
-2. **Hosting Frontend:** Despliegue gratuito sugerido en [Vercel](https://vercel.com), [Netlify](https://netlify.com) o GitHub Pages.
-3. **Librerías externas (CDN):**
-   - Tailwind CSS
-   - FontAwesome 6
-   - Supabase JS v2
-   - html2pdf.js
-   - SignaturePad v4
+Configurar el proyecto y la clave publicable en erp-config.js. Nunca poner una clave de servicio en el frontend. Para guardar albaranes y realizar traslados se necesitan las migraciones de supabase/migrations/, que ya están aplicadas en el proyecto conectado durante esta revisión.
 
----
+Los archivos de estilos están incluidos. Para regenerarlos, ejecutar npm install y npm run build:css.
 
-## 📲 Instalación como App Móvil (PWA) para Repartidores
+Para las pruebas de lógica y estructura, ejecutar npm test con Node.js.
 
-Para llevar `repartidor.html` como una aplicación nativa en el teléfono o tablet del camión:
-
-1. Despliega la carpeta del proyecto en Vercel o Netlify para obtener una dirección `https://`.
-2. Abre la URL en el navegador del dispositivo móvil (Chrome en Android / Safari en iOS).
-3. Pulsa sobre el menú de opciones del navegador.
-4. Selecciona **"Añadir a la pantalla de inicio"** o **"Instalar aplicación"**.
+El script tests/browser-smoke.cjs permite probar las pantallas con Playwright y una API simulada. El archivo tests/database-transactions.sql verifica las operaciones SQL dentro de una transacción que se revierte al finalizar.

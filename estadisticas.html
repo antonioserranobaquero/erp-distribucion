@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Analítica y Márgenes - ERP Distribución</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
@@ -95,9 +97,7 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const dbClient = ERP.getClient();
 
     window.onload = async () => {
       await calcularEstadisticas();
@@ -109,17 +109,18 @@
     }
 
     async function calcularEstadisticas() {
+      ["kpiVentasTotal","kpiCostesTotal","kpiBeneficioNeto","kpiMargenPorcentaje"].forEach(id => document.getElementById(id).textContent = '…');
+      try {
       const empresaId = getEmpresaIdActivo();
 
-      let qAlb = dbClient.from('albaranes').select('*');
-      if (empresaId) qAlb = qAlb.eq('empresa_id', empresaId);
-      const { data: albaranes } = await qAlb;
+      const [albaranes, compras, clientes, productos, lineas] = await Promise.all([
+        ERP.readAll(dbClient, 'albaranes', empresaId), ERP.readAll(dbClient, 'compras', empresaId),
+        ERP.readAll(dbClient, 'clientes', empresaId), ERP.readAll(dbClient, 'productos', empresaId),
+        ERP.readAll(dbClient, 'lineas_albaran', empresaId)
+      ]);
       const albList = albaranes || [];
       const totalVentas = albList.reduce((acc, a) => acc + parseFloat(a.total_importe || a.total || 0), 0);
 
-      let qComp = dbClient.from('compras').select('*');
-      if (empresaId) qComp = qComp.eq('empresa_id', empresaId);
-      const { data: compras } = await qComp;
       const compList = compras || [];
       const totalCompras = compList.reduce((acc, c) => acc + parseFloat(c.total_importe || c.total || 0), 0);
 
@@ -131,14 +132,11 @@
       document.getElementById('kpiBeneficioNeto').innerText = `${beneficioNeto.toFixed(2)} €`;
       document.getElementById('kpiMargenPorcentaje').innerText = `${margenPorcentaje.toFixed(1)} %`;
 
-      let qCli = dbClient.from('clientes').select('*');
-      if (empresaId) qCli = qCli.eq('empresa_id', empresaId);
-      const { data: clientes } = await qCli;
-      const cliMap = {};
+      const cliMap = Object.create(null);
       (clientes || []).forEach(c => cliMap[c.id] = extraerNombreCliente(c));
 
-      const clienteVentas = {};
-      const clienteConteos = {};
+      const clienteVentas = Object.create(null);
+      const clienteConteos = Object.create(null);
 
       albList.forEach(a => {
         const nom = cliMap[a.cliente_id] || 'Cliente Desconocido';
@@ -157,32 +155,21 @@
       } else {
         tbodyCli.innerHTML = sortedClientes.slice(0, 5).map(c => `
           <tr class="hover:bg-slate-50">
-            <td class="p-2 font-bold text-slate-800">${c.nombre}</td>
+            <td class="p-2 font-bold text-slate-800">${ERP.escapeHTML(c.nombre)}</td>
             <td class="p-2 text-center font-semibold text-slate-600">${c.envios} albaranes</td>
             <td class="p-2 text-right font-bold text-blue-600">${c.total.toFixed(2)} €</td>
           </tr>
         `).join('');
       }
 
-      let qProd = dbClient.from('productos').select('*');
-      if (empresaId) qProd = qProd.eq('empresa_id', empresaId);
-      const { data: productos } = await qProd;
-      const prodMap = {};
+      const prodMap = Object.create(null);
       (productos || []).forEach(p => prodMap[p.id] = p.nombre || p.nombre_producto);
 
-      const idsAlb = albList.map(a => a.id);
-      let lineas = [];
-      if (idsAlb.length > 0) {
-        let qLin = dbClient.from('lineas_albaran').select('*').in('albaran_id', idsAlb);
-        if (empresaId) qLin = qLin.eq('empresa_id', empresaId);
-        const { data: lData } = await qLin;
-        lineas = lData || [];
-      }
+      const prodKilos = Object.create(null);
+      const prodEuros = Object.create(null);
 
-      const prodKilos = {};
-      const prodEuros = {};
-
-      lineas.forEach(l => {
+      const idsAlbaranes = new Set(albList.map(a => String(a.id)));
+      lineas.filter(l => idsAlbaranes.has(String(l.albaran_id))).forEach(l => {
         const nom = l.nombre_producto || prodMap[l.producto_id] || 'Producto Congelado';
         const kg = parseFloat(l.kilos || 0);
         const eur = parseFloat(l.subtotal || l.importe || 0);
@@ -201,11 +188,15 @@
       } else {
         tbodyProd.innerHTML = sortedProductos.slice(0, 5).map(p => `
           <tr class="hover:bg-slate-50">
-            <td class="p-2 font-bold text-slate-800">${p.nombre}</td>
+            <td class="p-2 font-bold text-slate-800">${ERP.escapeHTML(p.nombre)}</td>
             <td class="p-2 text-right font-bold text-emerald-600">${p.kilos.toFixed(2)} kg</td>
             <td class="p-2 text-right font-bold text-slate-800">${p.euros.toFixed(2)} €</td>
           </tr>
         `).join('');
+      }
+      } catch (error) {
+        ["kpiVentasTotal","kpiCostesTotal","kpiBeneficioNeto","kpiMargenPorcentaje"].forEach(id => document.getElementById(id).textContent = 'No disponible');
+        ERP.showError(error);
       }
     }
   </script>

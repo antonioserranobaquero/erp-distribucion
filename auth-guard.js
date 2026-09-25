@@ -7,25 +7,10 @@
     return;
   }
 
-  const sesionRaw = localStorage.getItem('erp_usuario_sesion') || 
-                    localStorage.getItem('usuario_sesion') || 
-                    localStorage.getItem('user_session') || 
-                    localStorage.getItem('sesion');
-
-  if (!sesionRaw) {
-    window.location.href = "login.html";
-    return;
-  }
-
-  let sesion = {};
-  try {
-    sesion = JSON.parse(sesionRaw);
-    if (!sesion || (!sesion.id && !sesion.email)) {
-      throw new Error("Sesión inválida");
-    }
-  } catch (err) {
-    localStorage.clear();
-    window.location.href = "login.html";
+  const sesion = ERP.readSession();
+  if (!sesion) {
+    ERP.clearSession();
+    window.location.replace('login.html');
     return;
   }
 
@@ -63,6 +48,7 @@
 
   // Función verificadora de acceso a una página concreta
   function tieneAccesoPagina(pagina) {
+    if (pagina === 'imprimir_albaran.html') return tieneAccesoPagina('albaranes.html') || tieneAccesoPagina('historico.html') || tieneAccesoPagina('repartidor.html');
     if (esSuperadmin) return true;
     if (esAdmin && pagina !== 'superadmin_dashboard.html') return true;
 
@@ -107,7 +93,7 @@
     }
 
     const logoRender = empresaLogo 
-      ? `<img src="${empresaLogo}" alt="Logo" class="h-8 max-w-[120px] object-contain rounded-lg bg-white/10 p-0.5 shadow-sm">`
+      ? `<img src="${ERP.escapeHTML(ERP.safeImageURL(empresaLogo))}" alt="Logo" class="h-8 max-w-[120px] object-contain rounded-lg bg-white/10 p-0.5 shadow-sm">`
       : `<div class="p-2 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/30"><i class="fa-solid fa-snowflake text-lg"></i></div>`;
 
     const navbarHTML = `
@@ -119,7 +105,7 @@
             <div class="flex items-center gap-3 shrink-0 mr-3">
               ${logoRender}
               <div class="hidden lg:block">
-                <h1 class="font-black text-sm tracking-wide leading-none ${esModoInspeccionActivo ? 'text-amber-400' : 'text-white'}">${empresaNombre}</h1>
+                <h1 class="font-black text-sm tracking-wide leading-none ${esModoInspeccionActivo ? 'text-amber-400' : 'text-white'}">${ERP.escapeHTML(empresaNombre)}</h1>
                 <span class="text-[9px] text-slate-400 font-bold tracking-wider uppercase">
                   ${esModoInspeccionActivo ? '⚡ MODO INSPECCIÓN' : 'ERP DISTRIBUCIÓN'}
                 </span>
@@ -234,7 +220,7 @@
             <!-- BOTONES DERECHA -->
             <div class="flex items-center gap-2 shrink-0 ml-3">
               <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                ${rol}
+                ${ERP.escapeHTML(rol)}
               </span>
               ${tieneAccesoPagina('configuracion.html') ? `
                 <a href="configuracion.html" title="Configuración de Empresa y Logo" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition">
@@ -255,7 +241,7 @@
             <div class="flex items-center gap-3">
               <span class="flex items-center gap-1.5">
                 <i class="fa-solid fa-eye text-sm"></i>
-                MODO INSPECCIÓN SUPERADMIN: Viendo datos de "${empresaNombre}"
+                MODO INSPECCIÓN SUPERADMIN: Viendo datos de "${ERP.escapeHTML(empresaNombre)}"
               </span>
             </div>
             <div class="flex items-center gap-2">
@@ -276,17 +262,7 @@
 })();
 
 function getEmpresaIdActivo() {
-  const inspeccionada = localStorage.getItem('empresa_id_activo') || localStorage.getItem('MODO_DIOS_EMPRESA_ID');
-  if (inspeccionada) return inspeccionada;
-
-  const sesionRaw = localStorage.getItem('erp_usuario_sesion') || localStorage.getItem('usuario_sesion');
-  if (sesionRaw) {
-    try {
-      const ses = JSON.parse(sesionRaw);
-      if (ses.empresa_id) return ses.empresa_id;
-    } catch(e) {}
-  }
-  return '473e56d8-be5d-441d-bbbf-9a6010f35443';
+  return ERP.companyId();
 }
 
 function salirModoInspeccion() {
@@ -313,6 +289,6 @@ function salirModoInspeccion() {
 }
 
 function cerrarSesionERP() {
-  localStorage.clear();
+  ERP.clearSession();
   window.location.href = "login.html";
 }

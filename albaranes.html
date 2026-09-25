@@ -6,11 +6,13 @@
   <title>Emisión de Albaranes - ERP Distribución</title>
   
   <!-- Tailwind CSS & FontAwesome -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <!-- Supabase JS Client & Auth Guard -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
@@ -45,7 +47,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div class="relative">
           <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cliente *</label>
-          <input type="text" id="clienteInput" placeholder="🔍 Buscar cliente..." oninput="filtrarClientes()" onfocus="filtrarClientes()" autocomplete="off" class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl p-2.5 text-xs font-bold focus:bg-white focus:outline-none focus:border-blue-500 transition">
+          <input type="text" id="clienteInput" placeholder="🔍 Buscar cliente..." oninput="ERP.scheduleSearch(this, filtrarClientes)" onfocus="filtrarClientes()" autocomplete="off" class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl p-2.5 text-xs font-bold focus:bg-white focus:outline-none focus:border-blue-500 transition">
           <input type="hidden" id="clienteIdHidden">
           <div id="clienteResults" class="hidden absolute z-50 w-full bg-white border border-slate-300 rounded-xl shadow-xl max-h-60 overflow-y-auto mt-1 divide-y divide-slate-100"></div>
         </div>
@@ -111,7 +113,7 @@
             <label id="lblLoteOProv" class="block text-[10px] font-bold text-slate-500 uppercase">Nº Lote</label>
             <span id="badgeAutoProv" class="hidden text-[8.5px] bg-amber-100 text-amber-900 px-1 rounded font-bold">Autocompletado</span>
           </div>
-          <input type="text" id="loteInput" value="LOT-2026-GENERAL" oninput="filtrarSugerenciasProveedores()" onfocus="filtrarSugerenciasProveedores()" autocomplete="off" class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl p-2.5 text-xs font-mono font-bold">
+          <input type="text" id="loteInput" value="LOT-2026-GENERAL" oninput="ERP.scheduleSearch(this, filtrarSugerenciasProveedores)" onfocus="filtrarSugerenciasProveedores()" autocomplete="off" class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl p-2.5 text-xs font-mono font-bold">
           <div id="proveedorResults" class="hidden absolute z-50 w-full bg-white border border-amber-300 rounded-xl shadow-xl max-h-48 overflow-y-auto mt-1 divide-y divide-slate-100"></div>
         </div>
 
@@ -267,13 +269,12 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const db = ERP.getClient();
 
     let clientesCache = [];
     let productosCache = [];
     let lineasAlbaran = [];
+    let solicitudAlbaranId = crypto.randomUUID();
     let preciosPactadosCliente = {};
     let productosHabitualesCliente = [];
     let memoriaProveedoresPorProducto = {};
@@ -286,7 +287,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('fechaSalidaInput').value = new Date().toISOString().split('T')[0];
-      document.getElementById('numAlbaranInput').value = `ALB-2026-${Math.floor(Math.random() * 900 + 100)}`;
+      document.getElementById('numAlbaranInput').value = 'Se asignará al guardar';
       cargarClientes();
       cargarProductos();
       cargarRepartidores();
@@ -307,7 +308,7 @@
 
     async function cargarMemoriaProveedores() {
       const empresaId = typeof getEmpresaIdActivo === 'function' ? getEmpresaIdActivo() : null;
-      let query = db.from('lineas_albaran').select('producto_nombre, nombre, proveedor_compra, es_encargo, lote, created_at');
+      let query = db.from('lineas_albaran').select('producto_nombre, proveedor_compra, es_encargo, lote, created_at');
       if (esUUID(empresaId)) query = query.eq('empresa_id', empresaId);
       
       const { data } = await query.order('created_at', { ascending: false }).limit(200);
@@ -574,12 +575,12 @@
         const nombreFinal = prodCatalogo ? extraerNombreProducto(prodCatalogo) : p.nombre;
         const precioPactado = p.precio;
 
-        pillsBox.innerHTML += `
+        pillsBox.insertAdjacentHTML('beforeend', `
           <button type="button" onclick="cargarProductoDirecto('${p.id}', '${nombreFinal.replace(/'/g, "\\'")}', ${precioPactado})" class="px-3 py-1.5 bg-white hover:bg-blue-600 hover:text-white border border-blue-200 rounded-xl text-xs font-bold text-slate-800 transition shadow-sm flex items-center gap-1.5 group cursor-pointer">
             <span>${nombreFinal}</span>
             <span class="text-[10px] bg-emerald-50 group-hover:bg-emerald-700 text-emerald-700 group-hover:text-white px-2 py-0.5 rounded font-mono font-black border border-emerald-200">${precioPactado.toFixed(2)} €/kg</span>
           </button>
-        `;
+        `);
       });
 
       container.classList.remove('hidden');
@@ -824,7 +825,7 @@
         tNeto += kn; 
         tImp += sub;
 
-        tbody.innerHTML += `
+        tbody.insertAdjacentHTML('beforeend', `
           <tr class="hover:bg-slate-50 transition border-b border-slate-100 ${l.es_encargo ? 'bg-amber-50/40' : ''}">
             <td class="py-3 px-3 font-bold text-slate-800">
               ${l.es_encargo ? '<span class="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-black mr-1">🛒 FUERA</span>' : ''}
@@ -842,7 +843,7 @@
                 <i class="fa-solid fa-trash"></i>
               </button>
             </td>
-          </tr>`;
+          </tr>`);
       });
 
       document.getElementById('totalCajasSpan').innerText = tCajas;
@@ -864,7 +865,7 @@
         return; 
       }
 
-      const numAlb = document.getElementById('numAlbaranInput').value;
+      let numAlb = document.getElementById('numAlbaranInput').value;
       const fechaVal = document.getElementById('fechaSalidaInput').value;
 
       const payloadAlbaran = { 
@@ -883,15 +884,8 @@
 
       if (esUUID(empresaId)) payloadAlbaran.empresa_id = empresaId;
 
-      const { data: alb, error: errAlb } = await db.from('albaranes').insert([payloadAlbaran]).select().single();
-      if (errAlb) { 
-        alert("❌ Error al guardar albarán: " + errAlb.message); 
-        return; 
-      }
-
       const payloadLineas = lineasAlbaran.map(l => {
         const item = {
-          albaran_id: alb.id,
           numero_albaran: numAlb,
           producto_id: esUUID(l.producto_id) ? l.producto_id : null,
           producto_nombre: l.nombre,
@@ -912,37 +906,24 @@
         return item;
       });
 
-      const { error: errLin } = await db.from('lineas_albaran').insert(payloadLineas);
-      if (errLin) {
-        alert("❌ Error guardando las líneas: " + errLin.message);
-        return;
-      }
-
-      for (const linea of lineasAlbaran) {
-        if (linea.es_encargo || !esUUID(linea.producto_id)) continue;
-
-        const prod = productosCache.find(p => String(p.id) === String(linea.producto_id));
-        if (prod) {
-          const nuevoKilos = Math.max(0, (parseFloat(prod.kilos_stock || 0) - (Number(linea.kilos) || 0)));
-          const nuevasCajas = Math.max(0, (parseInt(prod.cajas_stock || 0) - (Number(linea.cajas) || 0)));
-          await db.from('productos').update({
-            kilos_stock: nuevoKilos,
-            cajas_stock: nuevasCajas
-          }).eq('id', prod.id);
-        }
-      }
+      const { data: alb, error } = await db.rpc('erp_guardar_albaran', {
+        p_empresa: empresaId, p_solicitud: solicitudAlbaranId, p_cabecera: payloadAlbaran, p_lineas: payloadLineas
+      });
+      if (error) { alert('No se ha guardado el albarán: ' + error.message); return; }
+      numAlb = alb.numero_albaran;
+      payloadAlbaran.total_importe = Number(alb.total_importe);
 
       await abrirVisor(numAlb, fechaVal, clienteNombre, repartidorVal, usuarioCreador, lineasAlbaran, payloadAlbaran.total_cajas, payloadAlbaran.total_kilos, payloadAlbaran.total_importe);
 
       lineasAlbaran = [];
+      solicitudAlbaranId = crypto.randomUUID();
       document.getElementById('clienteInput').value = '';
       document.getElementById('clienteIdHidden').value = '';
-      document.getElementById('numAlbaranInput').value = `ALB-2026-${Math.floor(Math.random() * 900 + 100)}`;
+      document.getElementById('numAlbaranInput').value = 'Se asignará al guardar';
       document.getElementById('contenedorHabituales').classList.add('hidden');
       document.getElementById('badgePreciosCliente').classList.add('hidden');
       renderizarTabla();
-      await cargarProductos();
-      await cargarMemoriaProveedores();
+      await Promise.all([cargarProductos(), cargarMemoriaProveedores()]);
     }
 
     async function abrirVisor(numAlb, fecha, cliente, repartidor, creador, lineas, c, kNetos, imp) {
@@ -987,7 +968,7 @@
       const tbody = document.getElementById('vTablaBody');
       tbody.innerHTML = '';
       lineas.forEach(l => {
-        tbody.innerHTML += `
+        tbody.insertAdjacentHTML('beforeend', `
           <tr class="border-b border-slate-100">
             <td class="p-2 sm:p-2.5 font-bold">
               ${l.es_encargo ? '<span class="text-[8.5px] bg-amber-100 text-amber-900 px-1 py-0.5 rounded font-black mr-1">FUERA</span>' : ''}
@@ -1000,7 +981,7 @@
             <td class="p-2 sm:p-2.5 text-center font-mono font-black text-slate-900 bg-slate-50">${Number(l.kilos).toFixed(2)} kg</td>
             <td class="p-2 sm:p-2.5 text-right font-semibold">${Number(l.precio_kg).toFixed(2)} €</td>
             <td class="p-2 sm:p-2.5 text-right font-bold text-blue-700">${Number(l.subtotal).toFixed(2)} €</td>
-          </tr>`;
+          </tr>`);
       });
 
       document.getElementById('modalVisor').classList.remove('hidden');
@@ -1011,6 +992,8 @@
       document.getElementById('modalVisor').classList.add('hidden'); 
       document.getElementById('modalVisor').classList.remove('flex');
     }
+    const guardarAlbaranUnaVez = guardarEImprimirAlbaran;
+    guardarEImprimirAlbaran = (...args) => ERP.runOnce('guardar-albaran', () => guardarAlbaranUnaVez(...args));
   </script>
 </body>
 </html>

@@ -6,11 +6,13 @@
   <title>Módulo de Facturación - ERP Distribución</title>
   
   <!-- Tailwind CSS & FontAwesome -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <!-- Supabase JS Client & Auth Guard -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
@@ -33,7 +35,7 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
         <div class="relative">
           <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cliente (Opcional)</label>
-          <input type="text" id="clienteInput" placeholder="🔍 Todos los clientes..." oninput="filtrarClientesPredictivo()" onfocus="filtrarClientesPredictivo()" autocomplete="off" class="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl p-2.5 text-xs font-bold focus:bg-white focus:outline-none focus:border-blue-500 transition">
+          <input type="text" id="clienteInput" placeholder="🔍 Todos los clientes..." oninput="ERP.scheduleSearch(this, filtrarClientesPredictivo)" onfocus="filtrarClientesPredictivo()" autocomplete="off" class="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl p-2.5 text-xs font-bold focus:bg-white focus:outline-none focus:border-blue-500 transition">
           <input type="hidden" id="clienteIdHidden">
           <div id="clienteResults" class="hidden absolute z-50 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto mt-1 divide-y divide-slate-100"></div>
         </div>
@@ -105,9 +107,7 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const db = ERP.getClient();
 
     let clientesCache = [];
     let albaranesPendientes = [];
@@ -272,7 +272,7 @@
         const estadoKey = (a.estado || 'pendiente').toLowerCase();
         const badgeClass = listaBadgeEstado[estadoKey] || 'bg-slate-100 text-slate-700 border-slate-200';
 
-        tbody.innerHTML += `
+        tbody.insertAdjacentHTML('beforeend', `
           <tr class="hover:bg-blue-50/40 transition">
             <td class="py-3.5 px-4 text-center">
               <input type="checkbox" onchange="toggleSeleccion('${a.id}')" ${checked} class="chk-albaran w-4 h-4 text-blue-600 rounded cursor-pointer">
@@ -288,7 +288,7 @@
                 ${a.estado || 'pendiente'}
               </span>
             </td>
-          </tr>`;
+          </tr>`);
       });
 
       actualizarTotalesSeleccion();

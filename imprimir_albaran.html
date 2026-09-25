@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Albarán de Entrega - Imprimir</title>
   
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
@@ -88,9 +90,7 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const db = ERP.getClient();
 
     document.addEventListener('DOMContentLoaded', cargarDatosAlbaran);
 
@@ -146,13 +146,13 @@
 
           base += sub;
 
-          tbody.innerHTML += `
+          tbody.insertAdjacentHTML('beforeend', `
             <tr class="border-b border-slate-100">
               <td class="p-3 font-bold text-slate-900">${nom}</td>
               <td class="p-3 text-slate-600">${cajas} cajas / ${kilos.toFixed(2)} kg (Lote: ${l.lote || 'LOT-GENERAL'})</td>
               <td class="p-3 text-right font-mono">${precio.toFixed(2)} €</td>
               <td class="p-3 text-right font-bold text-slate-900 font-mono">${sub.toFixed(2)} €</td>
-            </tr>`;
+            </tr>`);
         });
       } else {
         tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-slate-400">Sin líneas registradas</td></tr>';
