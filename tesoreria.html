@@ -6,11 +6,13 @@
   <title>Tesorería y Flujo de Caja - ERP Distribución</title>
   
   <!-- Tailwind CSS & FontAwesome -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <!-- Supabase JS Client & Auth Guard -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
@@ -148,34 +150,19 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const dbClient = ERP.getClient();
 
     document.addEventListener('DOMContentLoaded', cargarDatosTesoreria);
 
     async function cargarDatosTesoreria() {
+      ["cardIngresosTotales","cardGastosTotales","cardBeneficioNeto","cardCobrosPendientes"].forEach(id => document.getElementById(id).textContent = '…');
+      try {
       const empresaId = getEmpresaIdActivo();
 
-      // 1. Consultar Facturas
-      let qFac = dbClient.from('facturas').select('*');
-      if (empresaId) qFac = qFac.eq('empresa_id', empresaId);
-      const { data: facturas } = await qFac;
-
-      // 2. Consultar Albaranes
-      let qAlb = dbClient.from('albaranes').select('*');
-      if (empresaId) qAlb = qAlb.eq('empresa_id', empresaId);
-      const { data: albaranes } = await qAlb;
-
-      // 3. Consultar Gastos
-      let qGas = dbClient.from('gastos').select('*');
-      if (empresaId) qGas = qGas.eq('empresa_id', empresaId);
-      const { data: gastos } = await qGas;
-
-      // 4. Consultar Compras de mercancía
-      let qCom = dbClient.from('compras').select('*');
-      if (empresaId) qCom = qCom.eq('empresa_id', empresaId);
-      const { data: compras } = await qCom;
+      const [facturas, albaranes, gastos, compras] = await Promise.all([
+        ERP.readAll(dbClient, 'facturas', empresaId), ERP.readAll(dbClient, 'albaranes', empresaId),
+        ERP.readAll(dbClient, 'gastos', empresaId), ERP.readAll(dbClient, 'compras', empresaId)
+      ]);
 
       // CÁLCULO DE INGRESOS
       let totalIngresos = 0;
@@ -299,6 +286,10 @@
             <td class="p-3 text-right font-black font-mono text-rose-600">${g.importe.toFixed(2)} €</td>
           </tr>
         `).join('');
+      }
+      } catch (error) {
+        ["cardIngresosTotales","cardGastosTotales","cardBeneficioNeto","cardCobrosPendientes"].forEach(id => document.getElementById(id).textContent = 'No disponible');
+        ERP.showError(error);
       }
     }
   </script>

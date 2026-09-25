@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Compras y Gastos Operativos - ERP Distribución</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
@@ -171,9 +173,7 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const dbClient = ERP.getClient();
 
     let gastosCache = [];
 

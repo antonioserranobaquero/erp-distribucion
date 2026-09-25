@@ -6,11 +6,13 @@
   <title>Hoja de Carga y Compras Matinales - ERP Distribución</title>
   
   <!-- Tailwind CSS & FontAwesome -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <!-- Supabase JS Client & Auth Guard -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
@@ -181,9 +183,7 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const dbClient = ERP.getClient();
 
     let sesionUsuario = null;
 
@@ -275,8 +275,8 @@
         return;
       }
 
-      const albaranIds = albaranes.map(a => String(a.id));
-      const numerosAlbaran = albaranes.map(a => String(a.numero_albaran));
+      const albaranIds = new Set(albaranes.map(a => String(a.id)));
+      const numerosAlbaran = new Set(albaranes.map(a => String(a.numero_albaran)));
 
       // 2. Traer líneas asociadas
       let queryLineas = dbClient.from('lineas_albaran').select('*');
@@ -285,8 +285,8 @@
       const { data: todasLasLineas } = await queryLineas;
 
       const lineasList = (todasLasLineas || []).filter(l => 
-        albaranIds.includes(String(l.albaran_id)) || 
-        numerosAlbaran.includes(String(l.numero_albaran))
+        albaranIds.has(String(l.albaran_id)) || 
+        numerosAlbaran.has(String(l.numero_albaran))
       );
 
       // Separación: Compras Matinales vs. Stock de Cámara

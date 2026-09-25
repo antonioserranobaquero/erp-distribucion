@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestión de Almacenes y Cámaras - ERP Distribución</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
@@ -51,7 +53,7 @@
           <select id="filtroAlmacenSelect" onchange="filtrarTablaStock()" class="bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-bold text-slate-700">
             <option value="TODOS">🏢 Todas las Naves / Cámaras</option>
           </select>
-          <input type="text" id="buscarStockInput" oninput="filtrarTablaStock()" placeholder="🔍 Buscar producto..." class="bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-bold w-full md:w-60">
+          <input type="text" id="buscarStockInput" oninput="ERP.scheduleSearch(this, filtrarTablaStock)" placeholder="🔍 Buscar producto..." class="bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-bold w-full md:w-60">
         </div>
       </div>
 
@@ -164,9 +166,7 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const dbClient = ERP.getClient();
 
     let almacenesCache = [];
     let productosCache = [];
@@ -177,8 +177,7 @@
     });
 
     async function cargarTodo() {
-      await cargarAlmacenes();
-      await cargarProductos();
+      await Promise.all([cargarAlmacenes(), cargarProductos()]);
       await cargarStockDetallado();
       renderizarTodo();
     }
@@ -261,7 +260,7 @@
         const totalCajas = lineasDeEste.reduce((acc, l) => acc + Number(l.cajas || 0), 0);
         const totalKilos = lineasDeEste.reduce((acc, l) => acc + parseFloat(l.kilos || 0), 0);
 
-        cont.innerHTML += `
+        cont.insertAdjacentHTML('beforeend', `
           <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
             <div class="flex justify-between items-start">
               <div>
@@ -275,7 +274,7 @@
               <span class="text-xs font-black text-emerald-600 font-mono">${totalKilos.toFixed(2)} kg</span>
             </div>
           </div>
-        `;
+        `);
       });
     }
 
@@ -290,14 +289,14 @@
       transfDest.innerHTML = '';
 
       almacenesCache.forEach(a => {
-        filtro.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
-        transfOrig.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
-        transfDest.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
+        filtro.insertAdjacentHTML('beforeend', `<option value="${a.id}">${a.nombre}</option>`);
+        transfOrig.insertAdjacentHTML('beforeend', `<option value="${a.id}">${a.nombre}</option>`);
+        transfDest.insertAdjacentHTML('beforeend', `<option value="${a.id}">${a.nombre}</option>`);
       });
 
       transfProd.innerHTML = '<option value="">-- Seleccionar producto --</option>';
       productosCache.forEach(p => {
-        transfProd.innerHTML += `<option value="${p.id}">${p.nombre || p.nombre_producto}</option>`;
+        transfProd.insertAdjacentHTML('beforeend', `<option value="${p.id}">${p.nombre || p.nombre_producto}</option>`);
       });
     }
 
@@ -435,33 +434,10 @@
       const prod = productosCache.find(p => String(p.id) === String(prodId));
 
       try {
-        // 1. Restar de Origen
-        await dbClient.from('stock_almacenes').update({
-          cajas: Number(filaOrigen.cajas) - cajasMover,
-          kilos: parseFloat(filaOrigen.kilos) - kilosMover,
-          updated_at: new Date()
-        }).eq('id', filaOrigen.id);
-
-        // 2. Sumar o Insertar en Destino
-        const filaDestino = stockDetalladoCache.find(s => String(s.producto_id) === String(prodId) && String(s.almacen_id) === String(destId));
-        if (filaDestino) {
-          await dbClient.from('stock_almacenes').update({
-            cajas: Number(filaDestino.cajas) + cajasMover,
-            kilos: parseFloat(filaDestino.kilos) + kilosMover,
-            updated_at: new Date()
-          }).eq('id', filaDestino.id);
-        } else {
-          await dbClient.from('stock_almacenes').insert([{
-            empresa_id: empresaId,
-            almacen_id: destId,
-            almacen_nombre: almDest.nombre,
-            producto_id: prodId,
-            producto_nombre: prod.nombre || prod.nombre_producto,
-            lote: filaOrigen.lote || 'LOT-GENERAL',
-            cajas: cajasMover,
-            kilos: kilosMover
-          }]);
-        }
+        const { error } = await dbClient.rpc('erp_transferir_stock', {
+          p_empresa: empresaId, p_origen_fila: filaOrigen.id, p_destino: destId, p_cajas: cajasMover, p_kilos: kilosMover
+        });
+        if (error) throw error;
 
         alert(`✅ Traslado completado: ${cajasMover} cajas de "${prod.nombre}" movidas a "${almDest.nombre}".`);
         cerrarModalTransferencia();
@@ -471,6 +447,8 @@
         alert("Error en la transferencia: " + err.message);
       }
     }
+    const transferirUnaVez = ejecutarTransferencia;
+    ejecutarTransferencia = (...args) => ERP.runOnce('transferir-stock', () => transferirUnaVez(...args));
   </script>
 </body>
 </html>

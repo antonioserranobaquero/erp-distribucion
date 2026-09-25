@@ -6,11 +6,13 @@
   <title>Facturas Emitidas - ERP Distribución</title>
   
   <!-- Tailwind CSS & FontAwesome -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <!-- Supabase JS, Auth Guard, html2pdf.js y QR Code JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -234,9 +236,7 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const dbClient = ERP.getClient();
 
     let facturasTodas = [];
     let clientesMap = {};
@@ -473,13 +473,13 @@
             (Number(l.cajas) !== 0 || Number(l.kilos) !== 0)
           );
 
-          tbody.innerHTML += `
+          tbody.insertAdjacentHTML('beforeend', `
             <tr class="bg-blue-50/60 font-bold text-blue-900 border-t border-b border-blue-200">
               <td colspan="6" class="p-2 text-xs">
                 <i class="fa-solid fa-truck text-blue-600 mr-1.5"></i> Albarán de Entrega: <span class="font-mono">${numAlb}</span> · Fecha: <span class="font-mono text-slate-600">${fecAlb}</span>
               </td>
             </tr>
-          `;
+          `);
 
           if (lineasDeEsteAlb.length > 0) {
             lineasDeEsteAlb.forEach(linea => {
@@ -490,7 +490,7 @@
               const precioKg = parseFloat(linea.precio_kg || linea.precio_unidad || linea.precio || 0);
               const subtotal = parseFloat(linea.subtotal || (kilos * precioKg) || 0);
 
-              tbody.innerHTML += `
+              tbody.insertAdjacentHTML('beforeend', `
                 <tr class="hover:bg-slate-50 transition border-b border-slate-100">
                   <td class="p-2 sm:p-2.5 font-bold text-slate-900 pl-3 sm:pl-4">${nombreProd}</td>
                   <td class="p-2 sm:p-2.5 font-mono text-slate-500 text-[11px]">${lote}</td>
@@ -499,7 +499,7 @@
                   <td class="p-2 sm:p-2.5 text-right font-mono text-slate-700">${precioKg.toFixed(2)} €</td>
                   <td class="p-2 sm:p-2.5 text-right font-mono font-bold ${subtotal < 0 ? 'text-rose-600' : 'text-slate-900'}">${subtotal.toFixed(2)} €</td>
                 </tr>
-              `;
+              `);
             });
           }
         });

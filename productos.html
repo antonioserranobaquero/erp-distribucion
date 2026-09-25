@@ -6,11 +6,13 @@
   <title>Catálogo de Productos y Trazabilidad - ERP Distribución</title>
 
   <!-- Tailwind CSS & FontAwesome -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <!-- Supabase JS Client & Auth Guard -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
@@ -46,7 +48,7 @@
         <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs">
           <i class="fa-solid fa-magnifying-glass"></i>
         </span>
-        <input type="text" id="inputBuscar" oninput="filtrarProductos()" placeholder="Buscar por producto, lote..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        <input type="text" id="inputBuscar" oninput="ERP.scheduleSearch(this, filtrarProductos)" placeholder="Buscar por producto, lote..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 transition">
       </div>
       
       <div>
@@ -203,17 +205,14 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const dbClient = ERP.getClient();
 
     let productosCache = [];
     let almacenesCache = [];
     let stockAlmacenesCache = [];
 
     document.addEventListener('DOMContentLoaded', async () => {
-      await cargarAlmacenes();
-      await cargarStockAlmacenes();
+      await Promise.all([cargarAlmacenes(), cargarStockAlmacenes()]);
       await cargarProductos();
     });
 
@@ -236,8 +235,8 @@
       selInicial.innerHTML = '';
 
       almacenesCache.forEach(a => {
-        filtroNave.innerHTML += `<option value="${a.id}">${a.nombre}</option>`;
-        selInicial.innerHTML += `<option value="${a.id}">${a.nombre} (${a.temperatura || '-18ºC'})</option>`;
+        filtroNave.insertAdjacentHTML('beforeend', `<option value="${a.id}">${a.nombre}</option>`);
+        selInicial.insertAdjacentHTML('beforeend', `<option value="${a.id}">${a.nombre} (${a.temperatura || '-18ºC'})</option>`);
       });
     }
 
@@ -272,7 +271,7 @@
       select.innerHTML = '<option value="TODAS">📁 Todas las Categorías</option>';
       const categorias = [...new Set(productosCache.map(p => p.categoria).filter(Boolean))];
       categorias.forEach(cat => {
-        select.innerHTML += `<option value="${cat}">${cat}</option>`;
+        select.insertAdjacentHTML('beforeend', `<option value="${cat}">${cat}</option>`);
       });
     }
 
@@ -304,6 +303,7 @@
       const criterioOrden = document.getElementById('ordenSelect').value;
       const tbody = document.getElementById('tablaProductosBody');
 
+      const stockPorProducto = ERP.groupBy(stockAlmacenesCache.filter(s => Number(s.cajas) > 0 || Number(s.kilos) > 0), 'producto_id');
       let filtrados = productosCache.filter(p => {
         const nombre = extraerNombreProducto(p).toLowerCase();
         const categoria = (p.categoria || '').toLowerCase();
@@ -313,7 +313,7 @@
 
         let coincideNave = true;
         if (nave !== 'TODAS') {
-          coincideNave = stockAlmacenesCache.some(s => String(s.producto_id) === String(p.id) && String(s.almacen_id) === String(nave) && (Number(s.cajas) > 0 || Number(s.kilos) > 0));
+          coincideNave = (stockPorProducto.get(String(p.id)) || []).some(s => String(s.almacen_id) === String(nave));
         }
 
         return coincideTxt && coincideCat && coincideNave;
@@ -353,7 +353,7 @@
         const loteMostrar = p.lote || 'LOT-GENERAL';
         const caducidadHTML = formatearFechaCaducidad(p.fecha_caducidad);
 
-        const navesDelProducto = stockAlmacenesCache.filter(s => String(s.producto_id) === String(p.id) && (Number(s.cajas) > 0 || Number(s.kilos) > 0));
+        const navesDelProducto = (stockPorProducto.get(String(p.id)) || []);
         let badgesNaves = '';
 
         if (navesDelProducto.length > 0) {

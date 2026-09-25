@@ -6,11 +6,13 @@
   <title>Gestión de Reparto y Firma Digital - ERP Distribución</title>
 
   <!-- Tailwind CSS & FontAwesome -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <!-- Supabase JS Client & Auth Guard -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="erp-config.js"></script>
+  <script src="erp-core.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
@@ -310,9 +312,7 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://cybzltwxpwezawfnklgd.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_S1O3tX2mNv09PVH-WuSopA_mUEaz7U_";
-    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const db = ERP.getClient();
 
     let albaranesCache = [];
     let productosCatalogo = [];
@@ -573,7 +573,7 @@
           badgeEstado += `<span class="ml-1 px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[9px] font-bold" title="${a.motivo_modificacion || ''}">[*] Rectificado</span>`;
         }
 
-        tbody.innerHTML += `
+        tbody.insertAdjacentHTML('beforeend', `
           <tr class="hover:bg-blue-50/40 transition">
             <td class="p-3.5 font-mono font-bold text-blue-700">
               ${numAlb} ${isModificado ? '<span class="text-amber-500 font-black">[*]</span>' : ''}
@@ -591,7 +591,7 @@
                 ✍️ Firmar
               </button>
             </td>
-          </tr>`;
+          </tr>`);
       });
     }
 
@@ -672,7 +672,7 @@
           diffBadge = `<span class="px-2 py-0.5 rounded border text-[10px] font-bold ${color}">${signoC} caj. / ${signoK} kg</span>`;
         }
 
-        tbody.innerHTML += `
+        tbody.insertAdjacentHTML('beforeend', `
           <tr class="hover:bg-slate-50 transition border-b border-slate-100 ${l.es_devolucion ? 'bg-amber-50/40 text-amber-900' : ''}">
             <td class="p-2.5 font-bold">
               ${l.es_devolucion ? '<span class="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-black mr-1">DEV</span>' : ''}
@@ -696,7 +696,7 @@
               <button type="button" onclick="eliminarLineaEditando(${idx})" class="text-rose-500 hover:text-rose-700 font-bold p-1">✕</button>
             </td>
           </tr>
-        `;
+        `);
       });
     }
 
@@ -937,7 +937,7 @@
             originalTexto = `<span class="text-slate-400 font-normal">Sin cambio</span>`;
           }
 
-          tbody.innerHTML += `
+          tbody.insertAdjacentHTML('beforeend', `
             <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
               <td class="p-2 sm:p-2.5 font-bold text-slate-900">${l.producto_nombre || l.nombre || 'Producto'}</td>
               <td class="p-2 sm:p-2.5 font-mono text-slate-500 text-[11px]">${l.lote || 'LOT-GENERAL'}</td>
@@ -945,7 +945,7 @@
               <td class="p-2 sm:p-2.5 text-center font-black text-blue-900">${cjEntregadas} c. / ${kgEntregados.toFixed(2)} kg</td>
               <td class="p-2 sm:p-2.5 text-right font-mono text-slate-700">${parseFloat(l.precio_kg || 0).toFixed(2)} €</td>
               <td class="p-2 sm:p-2.5 text-right font-black font-mono ${parseFloat(l.subtotal || 0) < 0 ? 'text-rose-600' : 'text-blue-700'}">${parseFloat(l.subtotal || 0).toFixed(2)} €</td>
-            </tr>`;
+            </tr>`);
         });
       }
 

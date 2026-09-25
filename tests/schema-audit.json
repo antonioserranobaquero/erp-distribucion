@@ -1,0 +1,12 @@
+[
+  {
+    "file": "compras_gastos.html",
+    "table": "gastos",
+    "issue": "table_missing"
+  },
+  {
+    "file": "logs.html",
+    "table": "logs_auditoria",
+    "issue": "table_missing"
+  }
+]
