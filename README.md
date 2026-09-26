@@ -23,3 +23,7 @@ Los archivos de estilos están incluidos. Para regenerarlos, ejecutar npm instal
 Para las pruebas de lógica y estructura, ejecutar npm test con Node.js.
 
 El script tests/browser-smoke.cjs permite probar las pantallas con Playwright y una API simulada. El archivo tests/database-transactions.sql verifica las operaciones SQL dentro de una transacción que se revierte al finalizar.
+
+## Inventario y ampliación de clientes
+
+Consulta [todas las funciones y sus límites](FUNCIONES_APLICACION.md). La ampliación incluye alta y edición de clientes, saldo de facturas pendientes, filtro de riesgo y exportación CSV de resultados.

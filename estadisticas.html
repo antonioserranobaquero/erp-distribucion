@@ -10,11 +10,13 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="erp-config.js"></script>
   <script src="erp-core.js"></script>
+  <script src="erp-shell.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
     body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
   </style>
+  <link rel="stylesheet" href="assets/professional.css">
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
 
@@ -39,7 +41,7 @@
       <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
         <div class="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl text-2xl"><i class="fa-solid fa-sack-dollar"></i></div>
         <div>
-          <p class="text-xs text-slate-500 font-bold uppercase">Beneficio Neto</p>
+          <p class="text-xs text-slate-500 font-bold uppercase">Ventas menos compras</p>
           <h3 id="kpiBeneficioNeto" class="text-xl font-extrabold text-emerald-600">0.00 €</h3>
         </div>
       </div>

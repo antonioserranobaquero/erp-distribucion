@@ -62,3 +62,13 @@ Las medidas de bytes son tamaños de representaciones JSON calculados en Postgre
 - Las dos migraciones de `supabase/migrations/` ya se han aplicado al proyecto conectado. Son el registro del cambio, no una indicación de repetirlas a ciegas.
 - Las claves de `erp-config.js` son publicables. Una clave `service_role` nunca debe ponerse en estos archivos.
 - La versión anterior de los archivos sigue disponible en el historial de GitHub. Las migraciones añaden estructura y funciones; volver al frontend anterior no requiere borrar tablas ni datos.
+
+## Ampliación de clientes e inventario funcional
+
+- Se incluye `FUNCIONES_APLICACION.md` con las capacidades de los 24 módulos y sus límites.
+- Alta y edición de clientes con validación, selección explícita de empresa y bloqueo de envíos simultáneos en el formulario.
+- Saldo calculado a partir de facturas pendientes; incluye abonos y excluye cobradas, anuladas y borradores. No incluye pagos parciales ni albaranes sin facturar.
+- Búsqueda por contacto/localidad, filtro de riesgo y exportación CSV de los resultados con neutralización de fórmulas.
+- Los indicadores representan toda la empresa y no cambian al filtrar la tabla. Un fallo al leer las facturas muestra «No disponible» en lugar de cero.
+- 16 pruebas de lógica y estructura superadas. La prueba de navegador incorpora alta/edición de clientes y estabilidad de indicadores al buscar, con API simulada.
+- Esta ampliación se entrega en los archivos locales. No se ha realizado una migración de autenticación ni se han creado las tablas pendientes de gastos/auditoría en esta fase.
