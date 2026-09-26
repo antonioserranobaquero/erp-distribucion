@@ -147,3 +147,27 @@ test('todos los scripts se pueden compilar y los recursos locales existen', () =
     }
   }
 });
+
+test('saldos: cobros, abonos, estados excluidos y cero explícito', () => {
+  const { ERP } = boot();
+  const invoices = [
+    { cliente_id: 'a', total_importe: 120 },
+    { cliente_id: 'a', total_importe: -20 },
+    { cliente_id: 'a', total_importe: 90, cobrado: true },
+    { cliente_id: 'a', total_importe: 90, estado_cobro: 'cobrada' },
+    { cliente_id: 'a', total_importe: 90, estado: 'cobrada' },
+    { cliente_id: 'a', total_importe: 90, estado: 'anulada' },
+    { cliente_id: 'a', total_importe: 90, estado: 'borrador' },
+    { cliente_id: 'a', total_importe: 0, total_factura: 999 },
+    { cliente_id: 'b', total_factura: 0.1 },
+    { cliente_id: 'b', total: 0.2 }
+  ];
+  const balances = ERP.clientBalances(invoices);
+  assert.equal(balances.get('a'), 100);
+  assert.equal(balances.get('b'), 0.3);
+});
+test('CSV: neutraliza fórmulas y conserva comillas, saltos y delimitadores', () => {
+  const { ERP } = boot();
+  assert.equal(ERP.csvText([['=SUM(A1)', '  +cmd', '@x', '-12', 'A;B', 'a"b', 'a\nb', null]]),
+    '"\'=SUM(A1)";"\'  +cmd";"\'@x";"\'-12";"A;B";"a""b";"a\nb";""');
+});

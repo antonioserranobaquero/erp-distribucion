@@ -1,5 +1,10 @@
 document.addEventListener('DOMContentLoaded', cargarDatosDashboard);
-async function cargarDatosDashboard() {
+function cargarDatosDashboard() { return ERP.runOnce('dashboard-refresh', actualizarDashboard); }
+async function actualizarDashboard() {
+  const button = document.getElementById('dashboardRefresh');
+  const status = document.getElementById('dashboardUpdated');
+  if (button) button.disabled = true;
+  if (status) status.textContent = 'Actualizando resumen…';
   const metrics = ['statFacturacion', 'statPendiente', 'statStock', 'statAlertas'];
   try {
     metrics.forEach(id => { document.getElementById(id).textContent = '…'; });
@@ -38,11 +43,14 @@ async function cargarDatosDashboard() {
         <td class="py-2.5 px-3 text-center font-bold text-rose-600">${row.kilos.toFixed(2)} kg</td>
         <td class="py-2.5 px-3 text-center"><span class="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Bajo mínimo</span></td>
       </tr>`).join('') || '<tr><td colspan="3" class="text-center py-6 text-emerald-600">Nivel de stock óptimo.</td></tr>';
+    if (status) status.textContent = 'Actualizado a las ' + new Date().toLocaleTimeString('es-ES', {hour:'2-digit',minute:'2-digit'});
   } catch (error) {
+    if (status) status.textContent = 'No se pudo actualizar el resumen';
     metrics.forEach(id => { document.getElementById(id).textContent = 'No disponible'; });
     for (const [id, columns] of [['tablaUltimosAlbaranes', 4], ['tablaStockMinimo', 3]]) {
       document.getElementById(id).innerHTML = `<tr><td colspan="${columns}" class="p-4 text-center text-rose-600">No se pudieron cargar los datos. Vuelve a cargar la página.</td></tr>`;
     }
     ERP.showError(error);
-  }
+  } finally { if (button) button.disabled = false; }
 }
+

@@ -13,11 +13,13 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="erp-config.js"></script>
   <script src="erp-core.js"></script>
+  <script src="erp-shell.js"></script>
   <script src="auth-guard.js"></script>
 
   <style>
     body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
   </style>
+  <link rel="stylesheet" href="assets/professional.css">
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
 
@@ -28,7 +30,7 @@
       <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
         <div class="p-3 bg-blue-50 text-blue-600 rounded-xl text-xl"><i class="fa-solid fa-address-book"></i></div>
         <div>
-          <span class="text-[10px] font-bold uppercase text-slate-400">Clientes Activos</span>
+          <span class="text-[10px] font-bold uppercase text-slate-400">Clientes registrados</span>
           <h3 id="statClientes" class="text-xl font-black text-slate-800">0</h3>
         </div>
       </div>
@@ -36,7 +38,7 @@
       <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
         <div class="p-3 bg-amber-50 text-amber-600 rounded-xl text-xl"><i class="fa-solid fa-scale-unbalanced"></i></div>
         <div>
-          <span class="text-[10px] font-bold uppercase text-slate-400">Deuda Total de Clientes</span>
+          <span class="text-[10px] font-bold uppercase text-slate-400">Saldo de facturas pendientes</span>
           <h3 id="statDeuda" class="text-xl font-black text-amber-600">0.00 €</h3>
         </div>
       </div>
@@ -59,11 +61,18 @@
         <input type="text" id="inputBuscar" oninput="ERP.scheduleSearch(this, filtrarTabla)" placeholder="Buscar cliente, CIF o dirección..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500">
       </div>
 
-      <button onclick="alert('Formulario de alta de cliente')" class="w-full md:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
+      <button onclick="abrirCliente()" class="w-full md:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow transition flex items-center justify-center gap-2">
         <i class="fa-solid fa-user-plus"></i> Nuevo Cliente
       </button>
     </div>
 
+    <div class="flex flex-wrap items-center gap-4 text-sm">
+      <label><input id="soloRiesgo" type="checkbox" onchange="filtrarTabla()"> Solo riesgo excedido</label>
+      <button type="button" onclick="exportarClientes()" class="border bg-white rounded-lg px-4 py-2">Exportar CSV filtrado</button>
+      <span id="resultadosClientes" aria-live="polite"></span>
+    </div>
+    <p class="text-xs text-slate-500">Saldo de facturas pendientes, incluidos abonos. No incluye albaranes sin facturar ni pagos parciales. Los indicadores corresponden a toda la empresa.</p>
+    <p id="estadoClientes" role="status" class="text-sm text-emerald-700"></p>
     <!-- TABLA CLIENTES -->
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div class="overflow-x-auto">
@@ -88,92 +97,30 @@
 
   </div>
 
-  <script>
-    const db = ERP.getClient();
 
-    let clientesLista = [];
-
-    document.addEventListener('DOMContentLoaded', async () => {
-      await cargarClientes();
-    });
-
-    async function cargarClientes() {
-      const empresaIdActiva = getEmpresaIdActivo();
-      let clientes;
-      try {
-        clientes = await ERP.readAll(db, 'clientes', empresaIdActiva);
-      } catch (error) {
-        document.getElementById('tablaClientesBody').innerHTML = '<tr><td colspan="7" class="p-6 text-rose-600">No se pudieron cargar los clientes.</td></tr>';
-        ERP.showError(error);
-        return;
-      }
-
-      clientesLista = clientes || [];
-      renderizarClientes(clientesLista);
-    }
-
-    function renderizarClientes(lista) {
-      const tbody = document.getElementById('tablaClientesBody');
-      tbody.innerHTML = '';
-
-      if (!lista || lista.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">No hay clientes registrados en esta empresa.</td></tr>';
-        document.getElementById('statClientes').innerText = '0';
-        document.getElementById('statDeuda').innerText = '0.00 €';
-        document.getElementById('statRiesgo').innerText = '0 Clientes';
-        return;
-      }
-
-      let totalDeuda = 0;
-      let excedidos = 0;
-
-      const rows = lista.map(c => {
-        // Nombres de columnas exactos según Supabase Editor:
-        // nombre_comercial, cif_nif, forma_pago, limite_credito, telefono
-        const nombre = c.nombre_comercial || c.nombre || c.razon_social || `Cliente #${c.id}`;
-        const cif = c.cif_nif || c.cif || c.nif || '-';
-        const formaPago = c.forma_pago || 'Giro 30 días';
-        const deuda = Number(c.deuda_pendiente || c.deuda || 0);
-        const limite = Number(c.limite_credito || c.limite_riesgo || 0);
-
-        totalDeuda += deuda;
-        const esExcedido = limite > 0 && deuda > limite;
-        if (esExcedido) excedidos++;
-
-        return `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="p-3 font-bold text-slate-900">${ERP.escapeHTML(nombre)}</td>
-            <td class="p-3 font-mono text-slate-500">${ERP.escapeHTML(cif)}</td>
-            <td class="p-3 text-slate-600"><span class="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-semibold">${ERP.escapeHTML(formaPago)}</span></td>
-            <td class="p-3 text-right font-mono font-bold ${deuda > 0 ? 'text-amber-600' : 'text-slate-600'}">${deuda.toFixed(2)} €</td>
-            <td class="p-3 text-right font-mono text-slate-500">${limite > 0 ? limite.toFixed(2) + ' €' : 'Sin límite'}</td>
-            <td class="p-3 text-center">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${esExcedido ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
-                ${esExcedido ? 'RIESGO EXCEDIDO' : 'OK'}
-              </span>
-            </td>
-            <td class="p-3 text-center">
-              <button class="text-slate-400 hover:text-blue-600 p-1"><i class="fa-solid fa-pen-to-square"></i></button>
-            </td>
-          </tr>
-        `;
-      });
-
-      tbody.innerHTML = rows.join('');
-      document.getElementById('statClientes').innerText = lista.length;
-      document.getElementById('statDeuda').innerText = totalDeuda.toFixed(2) + ' €';
-      document.getElementById('statRiesgo').innerText = `${excedidos} Clientes`;
-    }
-
-    function filtrarTabla() {
-      const q = document.getElementById('inputBuscar').value.toLowerCase().trim();
-      const filtrados = clientesLista.filter(c => {
-        const nom = (c.nombre_comercial || c.nombre || c.razon_social || '').toLowerCase();
-        const cif = (c.cif_nif || c.cif || c.nif || '').toLowerCase();
-        return nom.includes(q) || cif.includes(q) || String(c.direccion || '').toLowerCase().includes(q);
-      });
-      renderizarClientes(filtrados);
-    }
-  </script>
+  <dialog id="dialogCliente" aria-labelledby="tituloCliente" class="rounded-2xl p-6 w-full max-w-2xl" oncancel="if (guardandoCliente) event.preventDefault()">
+    <form id="formCliente" onsubmit="enviarCliente(event)" class="space-y-4">
+      <h2 id="tituloCliente" class="text-xl font-bold">Nuevo cliente</h2>
+      <input type="hidden" name="id">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="block text-sm">Nombre comercial *<input name="nombre_comercial" type="text" required maxlength="250" class="block w-full border rounded-lg p-2 mt-1"></label>
+<label class="block text-sm">Razón social<input name="razon_social" type="text"  maxlength="250" class="block w-full border rounded-lg p-2 mt-1"></label>
+<label class="block text-sm">CIF / NIF<input name="cif_nif" type="text"  maxlength="250" class="block w-full border rounded-lg p-2 mt-1"></label>
+<label class="block text-sm">Teléfono<input name="telefono" type="tel"  maxlength="250" class="block w-full border rounded-lg p-2 mt-1"></label>
+<label class="block text-sm">Correo electrónico<input name="email" type="email"  maxlength="250" class="block w-full border rounded-lg p-2 mt-1"></label>
+<label class="block text-sm">Dirección<input name="direccion" type="text"  maxlength="250" class="block w-full border rounded-lg p-2 mt-1"></label>
+<label class="block text-sm">Población<input name="poblacion" type="text"  maxlength="250" class="block w-full border rounded-lg p-2 mt-1"></label>
+<label class="block text-sm">Forma de pago<input name="forma_pago" type="text"  maxlength="250" class="block w-full border rounded-lg p-2 mt-1"></label>
+<label class="block text-sm">Días de pago<input name="dias_pago" type="number"  min="0" step="1" class="block w-full border rounded-lg p-2 mt-1"></label>
+<label class="block text-sm">Límite crédito (€; 0 = sin límite)<input name="limite_credito" type="number"  min="0" step="0.01" class="block w-full border rounded-lg p-2 mt-1"></label>
+      </div>
+      <p id="errorCliente" role="alert" class="text-rose-600 text-sm"></p>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="cerrarCliente()" class="border rounded-lg px-4 py-2">Cancelar</button>
+        <button id="guardarCliente" type="submit" class="bg-blue-600 text-white rounded-lg px-4 py-2 disabled:opacity-50">Guardar cliente</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="clientes.js"></script>
 </body>
 </html>

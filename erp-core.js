@@ -147,6 +147,26 @@
     }
     return { billed, pending, stock, documents, lowStock };
   }
+  function clientBalances(invoices) {
+    const balances = new Map();
+    for (const invoice of invoices) {
+      const state = String(invoice.estado || '').toLowerCase();
+      if (!invoice.cliente_id || ['anulada', 'anulado', 'cancelada', 'cancelado', 'borrador'].includes(state) || invoice.cobrado === true || String(invoice.estado_cobro || state).toLowerCase() === 'cobrada') continue;
+      // Céntimos para evitar acumulación de errores binarios. Los abonos restan.
+      const cents = Math.round(number(invoice.total_importe ?? invoice.total_factura ?? invoice.total) * 100);
+      const key = String(invoice.cliente_id);
+      balances.set(key, (balances.get(key) || 0) + cents);
+    }
+    return new Map([...balances].map(([key, cents]) => [key, cents / 100]));
+  }
+  function csvText(rows) {
+    return rows.map(row => row.map(value => {
+      let text = String(value ?? '');
+      // Neutralizar fórmulas de hojas de cálculo, incluso tras espacios/control.
+      if (/^[\s\u0000-\u001f]*[=+@-]/.test(text)) text = "'" + text;
+      return '"' + text.replace(/"/g, '""') + '"';
+    }).join(';')).join('\r\n');
+  }
   function showError(error) {
     console.error(error);
     if (!document.body) return;
@@ -161,6 +181,6 @@
     }
     box.textContent = 'No se ha podido completar la operación. ' + (error?.message || 'Comprueba la conexión y vuelve a intentarlo.');
   }
-  root.ERP = Object.freeze({ getClient, readSession, clearSession, companyId, number, escapeHTML, safeImageURL, groupBy, indexBy, debounce, scheduleSearch, runOnce, readAll, readByIds, lineAmount, documentAmount, dashboardData, showError });
+  root.ERP = Object.freeze({ getClient, readSession, clearSession, companyId, number, escapeHTML, safeImageURL, groupBy, indexBy, debounce, scheduleSearch, runOnce, readAll, readByIds, lineAmount, documentAmount, dashboardData, clientBalances, csvText, showError });
   root.addEventListener('unhandledrejection', event => showError(event.reason));
 })(window);
