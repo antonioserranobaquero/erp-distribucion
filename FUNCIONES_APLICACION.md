@@ -53,3 +53,9 @@ Primera mejora publicada: estilos compilados, conexión y utilidades compartidas
 Ampliación actual: gestión completa de alta/edición de clientes, saldo de facturas pendientes, filtro de riesgo, exportación CSV con neutralización de fórmulas y mensajes de error que evitan mostrar una deuda cero cuando falla la lectura. Los indicadores permanecen referidos a toda la empresa al filtrar la tabla.
 
 Prioridades pendientes, todavía no implementadas: migración coordinada a Supabase Auth y aislamiento RLS; gastos y auditoría con permisos desde su creación; libro unificado de movimientos de stock; compras y facturación atómicas; cobros parciales y conciliación; alertas de caducidad basadas en existencias por lote. Se conserva la orientación a distribución, almacén y reparto.
+
+## Simplificación del 26/09/2026
+
+Gastos y Auditoría retirados por carecer de soporte operativo; Tesorería retirada por balance incompleto. Sus URLs redirigen a Compras, Inicio y Facturas respectivamente, sin eliminar datos de empresa. Las descripciones anteriores documentan el estado previo. Conexión sigue como enlace de compatibilidad hacia Configuración.
+
+Facturas incorpora filtros combinables por fecha de emisión, antigüedad de pendientes de 30/60/90 días, resumen del importe seleccionado, limpieza de filtros y exportación CSV de resultados. La antigüedad no equivale a vencimiento contractual ni contempla cobros parciales. El filtro de antigüedad excluye anuladas, borradores, cobradas y abonos.

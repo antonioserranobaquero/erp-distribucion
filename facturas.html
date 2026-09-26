@@ -105,7 +105,7 @@
         <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
           <i class="fa-solid fa-magnifying-glass"></i>
         </span>
-        <input type="text" id="inputBuscar" onkeyup="filtrarFacturas()" placeholder="Buscar por cliente o nº factura..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl font-bold bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 transition">
+        <input type="text" id="inputBuscar" oninput="filtrarFacturas()" placeholder="Buscar por cliente o nº factura..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl font-bold bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 transition">
       </div>
       <div class="flex gap-2 w-full md:w-auto">
         <select id="selectEstado" onchange="filtrarFacturas()" class="w-full md:w-auto p-2 border border-slate-200 rounded-xl font-bold text-slate-700 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500">
@@ -117,6 +117,15 @@
       </div>
     </div>
 
+    <section class="erp-invoice-tools" aria-label="Seguimiento de cobros">
+      <label>Emisión desde<input type="date" id="fechaDesde" onchange="filtrarFacturas()"></label>
+      <label>Emisión hasta<input type="date" id="fechaHasta" onchange="filtrarFacturas()"></label>
+      <label>Antigüedad de pendientes<select id="antiguedad" onchange="filtrarFacturas()"><option value="0">Todas</option><option value="30">30 días o más</option><option value="60">60 días o más</option><option value="90">90 días o más</option></select></label>
+      <button class="erp-action" onclick="limpiarFiltrosFacturas()">Limpiar filtros</button>
+      <button class="erp-action" id="exportarFacturas" onclick="exportarFacturasCSV()" disabled>Exportar resultados CSV</button>
+      <p id="resumenFiltro" role="status">Cargando facturas…</p>
+      <small>La antigüedad se calcula desde la emisión; no indica vencimiento contractual. Los importes no reflejan cobros parciales.</small>
+    </section>
     <!-- TABLA DE FACTURAS -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="overflow-x-auto">
@@ -280,7 +289,7 @@
       tbody.innerHTML = lista.map(f => {
         const cli = clientesMap[f.cliente_id] || {};
         const clienteNom = f.cliente_nombre || cli.nombre_comercial || cli.nombre || 'Cliente';
-        const fecha = (f.fecha || f.fecha_emision || '2026-01-01').split('T')[0];
+        const fecha = (f.fecha || f.fecha_emision || 'Sin fecha').split('T')[0];
         
         let total = parseFloat(f.total_importe ?? f.total_factura ?? f.total ?? 0);
         let base = parseFloat(f.base_imponible || (total / 1.10));
@@ -333,6 +342,17 @@
       });
     }
 
+    let facturasFiltradas = [];
+    const importeFactura = f => ERP.number(f.total_importe ?? f.total_factura ?? f.total ?? 0);
+    function limpiarFiltrosFacturas() {
+      ['inputBuscar','fechaDesde','fechaHasta'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('selectEstado').value='todos'; document.getElementById('antiguedad').value='0'; filtrarFacturas();
+    }
+    function exportarFacturasCSV() {
+      const rows=[['Factura','Emisión','Cliente','Total EUR','Estado de cobro'],...facturasFiltradas.map(f=>[f.numero_factura, (f.fecha||f.fecha_emision||'').slice(0,10), f.cliente_nombre||clientesMap[f.cliente_id]?.nombre_comercial||clientesMap[f.cliente_id]?.nombre||'', importeFactura(f).toFixed(2), f.estado_cobro==='cobrada'||f.cobrado===true?'Cobrada':'Pendiente'])];
+      const url=URL.createObjectURL(new Blob(['\ufeff'+ERP.csvText(rows)],{type:'text/csv;charset=utf-8'}));
+      const a=document.createElement('a');a.href=url;a.download='facturas-filtradas.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
     function filtrarFacturas() {
       const q = document.getElementById('inputBuscar').value.toLowerCase().trim();
       const estado = document.getElementById('selectEstado').value;
@@ -350,9 +370,20 @@
         if (estado === 'cobrada') coincideEstado = (estadoCobro === 'cobrada' || f.cobrado === true);
         if (estado === 'rectificativa') coincideEstado = (f.tipo === 'rectificativa' || (f.total_importe || 0) < 0);
 
-        return coincideQ && coincideEstado;
+        const desde=document.getElementById('fechaDesde').value, hasta=document.getElementById('fechaHasta').value;
+        const fecha=(f.fecha||f.fecha_emision||'').slice(0,10);
+        const dias=Number(document.getElementById('antiguedad').value);
+        const hoy=new Date(); const hoyUTC=Date.UTC(hoy.getFullYear(),hoy.getMonth(),hoy.getDate());
+        const edad=fecha ? Math.floor((hoyUTC-Date.parse(fecha+'T00:00:00Z'))/86400000) : NaN;
+        const pendiente=estadoCobro!=='cobrada'&&f.cobrado!==true && !['anulada','anulado','cancelada','cancelado','borrador'].includes(String(f.estado||'').toLowerCase());
+        return coincideQ && coincideEstado && (!desde || fecha>=desde) && (!hasta || (fecha && fecha<=hasta)) && (!dias || (pendiente && edad>=dias && importeFactura(f)>0));
       });
 
+      facturasFiltradas=filtradas;
+      const total=filtradas.reduce((n,f)=>n+importeFactura(f),0);
+      const invalido=document.getElementById('fechaDesde').value && document.getElementById('fechaHasta').value && document.getElementById('fechaDesde').value>document.getElementById('fechaHasta').value;
+      document.getElementById('resumenFiltro').textContent=invalido?'La fecha inicial debe ser anterior o igual a la final.':filtradas.length+' de '+facturasTodas.length+' facturas · Total seleccionado: '+total.toLocaleString('es-ES',{style:'currency',currency:'EUR'});
+      document.getElementById('exportarFacturas').disabled=!filtradas.length;
       renderizarTabla(filtradas);
     }
 
@@ -406,7 +437,7 @@
 
       document.getElementById('pdfCabeceraEmpresa').innerHTML = cabeceraPDF;
       document.getElementById('pdfNumFactura').innerText = factura.numero_factura || 'FAC-000';
-      document.getElementById('pdfFecha').innerText = `Fecha: ${(factura.fecha || factura.fecha_emision || '2026-01-01').split('T')[0]}`;
+      document.getElementById('pdfFecha').innerText = `Fecha: ${(factura.fecha || factura.fecha_emision || 'Sin fecha').split('T')[0]}`;
       document.getElementById('pdfClienteNombre').innerText = clienteNom;
       document.getElementById('pdfClienteCif').innerText = `CIF/NIF: ${cli.cif || cli.cif_nif || 'B-99999999'}`;
       document.getElementById('pdfClienteDireccion').innerText = `Dirección: ${cli.direccion || 'Domicilio habitual'}`;
