@@ -4,7 +4,7 @@ window.renderERPShell = function ({ page, session, role, companyName, companyLog
     ['Resumen', [['index.html','Panel general','fa-house'],['estadisticas.html','Estadísticas','fa-chart-line']]],
     ['Ventas y clientes', [['albaranes.html','Nuevo albarán','fa-file-circle-plus'],['historico.html','Histórico de ventas','fa-clock-rotate-left'],['clientes.html','Clientes','fa-users'],['facturacion.html','Emitir facturas','fa-file-invoice'],['facturas.html','Facturas y cobros','fa-receipt']]],
     ['Logística', [['rutas.html','Rutas de reparto','fa-route'],['hoja_carga.html','Hoja de carga','fa-truck-ramp-box'],['repartidor.html','Repartidor','fa-truck'],['productos.html','Productos','fa-box'],['almacen.html','Almacenes','fa-warehouse'],['etiquetas.html','Etiquetas','fa-barcode']]],
-    ['Administración', [['compras.html','Compras','fa-cart-shopping'],['compras_gastos.html','Gastos','fa-wallet'],['tesoreria.html','Tesorería','fa-building-columns'],['usuarios.html','Usuarios y permisos','fa-user-gear'],['configuracion.html','Configuración','fa-gear'],['importar.html','Importar datos','fa-file-import'],['logs.html','Auditoría','fa-list-check'],['superadmin_dashboard.html','Empresas','fa-building']]]
+    ['Administración', [['compras.html','Compras','fa-cart-shopping'],['usuarios.html','Usuarios y permisos','fa-user-gear'],['configuracion.html','Configuración','fa-gear'],['importar.html','Importar datos','fa-file-import'],['superadmin_dashboard.html','Empresas','fa-building']]]
   ];
   const allowed=groups.flatMap(([,items])=>items).filter(([url])=>canAccess(url));
   const active=allowed.find(([url])=>url===page);

@@ -61,6 +61,8 @@ function initialize() {
       page.on('pageerror', e => errors.push(e.message));
       page.on('dialog', d => d.dismiss());
       await page.goto('https://erp.test/' + file + '?id=11111111-1111-4111-8111-111111111111');
+      const redirects={'logs.html':'index.html','tesoreria.html':'facturas.html','compras_gastos.html':'compras.html'};
+      if(redirects[file]) await page.waitForURL('**/'+redirects[file]);
       if (file === 'conexion.html') await page.waitForURL('**/configuracion.html');
       await page.waitForTimeout(150);
       const state = await page.evaluate(() => ({ errorBanner: document.getElementById('erp-error')?.textContent || null, writes: window.__writes, queries: window.__queries }));
@@ -120,6 +122,16 @@ function initialize() {
     await ui.locator('[data-invoice-pay]').first().waitFor();
     const writes = await ui.evaluate(async()=>{await Promise.all([toggleEstadoCobro('11111111-1111-4111-8111-111111111111'),toggleEstadoCobro('11111111-1111-4111-8111-111111111111')]);return window.__writes;});
     if(writes.length!==1 || writes[0].payload.cobrado!==true) failed.push({flow:'cobro-unico',writes});
+    await ui.evaluate(()=>{const old=new Date();old.setDate(old.getDate()-45);facturasTodas=[{id:'old',numero_factura:'FAC-ANTIGUA',fecha:old.toISOString().slice(0,10),total_importe:250,estado:'emitida'},{id:'paid',fecha:'2020-01-01',total_importe:100,cobrado:true},{id:'cancel',fecha:'2020-01-01',total_importe:500,estado:'anulada'},{id:'unknown',total_importe:100}];filtrarFacturas();});
+    await ui.locator('#antiguedad').selectOption('30');
+    if(await ui.locator('#tablaFacturas tr').count()!==1 || !(await ui.locator('#tablaFacturas').textContent()).includes('FAC-ANTIGUA')) failed.push({flow:'antiguedad-pendientes'});
+    const downloaded=ui.waitForEvent('download');await ui.locator('#exportarFacturas').click();const csv=await downloaded;if(csv.suggestedFilename()!=='facturas-filtradas.csv') failed.push({flow:'csv-facturas'});
+    await ui.locator('#fechaDesde').fill('2099-01-01');await ui.locator('#fechaHasta').fill('2000-01-01');
+    if(!(await ui.locator('#resumenFiltro').textContent()).includes('fecha inicial')) failed.push({flow:'fechas-invalidas'});
+    await ui.getByRole('button',{name:'Limpiar filtros'}).click();
+    if(await ui.locator('#tablaFacturas tr').count()!==4) failed.push({flow:'limpiar-filtros'});
+    await ui.screenshot({path:path.join(__dirname,'invoice-tools-mobile.png'),fullPage:true});
+    if(await ui.locator('.erp-sidebar a[href="logs.html"],.erp-sidebar a[href="tesoreria.html"],.erp-sidebar a[href="compras_gastos.html"]').count()) failed.push({flow:'modulos-retirados'});
     await ui.close();
     console.log(JSON.stringify({ pages: results.length, flows: ['doble-guardado-albaran', 'alta-edicion-clientes', 'filtro-indicadores-clientes'], failed }, null, 2));
     if (failed.length) process.exitCode = 1;
